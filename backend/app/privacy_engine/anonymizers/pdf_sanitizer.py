@@ -28,6 +28,85 @@ class PdfVerificationError(Exception):
 
 
 class PdfSanitizer:
+
+    @staticmethod
+    def _get_word_rects(page) -> list:
+        """
+        Extract every word on the page with its bounding rectangle.
+        Returns list of (word_text, pymupdf.Rect).
+        Uses get_text("words") which returns:
+          (x0, y0, x1, y1, "word", block_no, line_no, word_no)
+        """
+        results = []
+        for w in page.get_text("words"):
+            x0, y0, x1, y1 = w[:4]
+            word_text = w[4]
+            results.append((word_text, pymupdf.Rect(x0, y0, x1, y1)))
+        return results
+
+    @classmethod
+    def _redact_snippet_on_page(cls, page, snippet: str) -> bool:
+        """
+        Finds and marks redaction annotations for a text snippet on a page.
+        Uses multiple strategies:
+          1. Exact text search via page.search_for()
+          2. Word-level matching via get_text("words") for multi-word entities
+        Returns True if any redaction annotations were added.
+        """
+        added = False
+
+        # Strategy 1: Exact text search (works when PDF text runs match)
+        hits = page.search_for(snippet)
+        for r in hits:
+            pad = pymupdf.Rect(r.x0 - 1, r.y0 - 1, r.x1 + 1, r.y1 + 1)
+            page.add_redact_annot(pad, fill=(0, 0, 0))
+            added = True
+
+        # Strategy 2: Word-level matching — get all words on the page and
+        # redact any word that is part of the snippet.  This handles text
+        # that is split across multiple internal PDF text runs.
+        snippet_lower = snippet.lower()
+        snippet_words = snippet_lower.split()
+
+        if snippet_words:
+            page_words = cls._get_word_rects(page)
+
+            # For single-word snippets, just find that word
+            if len(snippet_words) == 1:
+                target = snippet_words[0]
+                for word_text, rect in page_words:
+                    if target in word_text.lower():
+                        pad = pymupdf.Rect(rect.x0 - 1, rect.y0 - 1, rect.x1 + 1, rect.y1 + 1)
+                        page.add_redact_annot(pad, fill=(0, 0, 0))
+                        added = True
+            else:
+                # For multi-word snippets, use a sliding window over page words
+                # to find sequences that match the snippet words
+                for i in range(len(page_words)):
+                    # Try matching starting from position i
+                    matched_rects = []
+                    si = 0  # index into snippet_words
+                    for j in range(i, min(i + len(snippet_words) + 5, len(page_words))):
+                        pw_text = page_words[j][0].lower().strip(".,;:!?()[]{}\"'")
+                        if si < len(snippet_words) and (
+                            pw_text == snippet_words[si] or
+                            snippet_words[si] in pw_text or
+                            pw_text in snippet_words[si]
+                        ):
+                            matched_rects.append(page_words[j][1])
+                            si += 1
+                            if si >= len(snippet_words):
+                                break
+
+                    # If we matched all snippet words, redact all their rects
+                    if si >= len(snippet_words) and matched_rects:
+                        for rect in matched_rects:
+                            pad = pymupdf.Rect(rect.x0 - 1, rect.y0 - 1, rect.x1 + 1, rect.y1 + 1)
+                            page.add_redact_annot(pad, fill=(0, 0, 0))
+                            added = True
+
+        return added
+
     @classmethod
     def redact_pdf(
         cls,
@@ -58,6 +137,13 @@ class PdfSanitizer:
         except Exception as e:
             raise PdfSanitizationError(f"Could not open input PDF: {e}")
 
+        # Collect all snippets to redact (for cross-page sweep)
+        all_snippets: List[str] = []
+        for f in approved_findings:
+            snippet = original_text[f.start:f.end].strip() if original_text and 0 <= f.start < f.end <= len(original_text) else ""
+            if snippet and len(snippet) >= 2:
+                all_snippets.append(snippet)
+
         # Group approved findings by 1-based page number
         findings_by_page: dict[int, List[Finding]] = {}
         for f in approved_findings:
@@ -70,13 +156,8 @@ class PdfSanitizer:
                 page = doc[page_idx]
                 page_findings = findings_by_page.get(page_num, [])
 
-                if not page_findings:
-                    continue
-
+                # Phase 1: Redact bounding boxes from detection
                 for f in page_findings:
-                    snippet = original_text[f.start:f.end].strip() if original_text and 0 <= f.start < f.end <= len(original_text) else ""
-
-                    # Method A: Redact recorded bounding boxes
                     if f.bounding_boxes:
                         for box in f.bounding_boxes:
                             rect = pymupdf.Rect(
@@ -87,22 +168,17 @@ class PdfSanitizer:
                             )
                             page.add_redact_annot(rect, fill=(0, 0, 0))
 
-                    # Method B: Search directly on page for exact snippet
+                # Phase 2: Search-based redaction for page-specific findings
+                for f in page_findings:
+                    snippet = original_text[f.start:f.end].strip() if original_text and 0 <= f.start < f.end <= len(original_text) else ""
                     if snippet and len(snippet) >= 2:
-                        hits = page.search_for(snippet)
-                        for r in hits:
-                            pad_rect = pymupdf.Rect(r.x0 - 1, r.y0 - 1, r.x1 + 1, r.y1 + 1)
-                            page.add_redact_annot(pad_rect, fill=(0, 0, 0))
+                        cls._redact_snippet_on_page(page, snippet)
 
-                        # Method C: If exact search found nothing, try word-by-word
-                        # This handles cases where text spans multiple internal runs/lines
-                        if not hits:
-                            words = snippet.split()
-                            for word in words:
-                                if len(word) >= 2:
-                                    for r in page.search_for(word):
-                                        pad_rect = pymupdf.Rect(r.x0 - 1, r.y0 - 1, r.x1 + 1, r.y1 + 1)
-                                        page.add_redact_annot(pad_rect, fill=(0, 0, 0))
+                # Phase 3: Cross-page sweep — search ALL snippets on EVERY page
+                # This catches text that appears on unexpected pages or was
+                # assigned the wrong page number during detection
+                for snippet in all_snippets:
+                    cls._redact_snippet_on_page(page, snippet)
 
                 # Apply true destructive redaction (both text stream and image pixels)
                 page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_PIXELS)
@@ -168,9 +244,7 @@ class PdfSanitizer:
                 snippet = ""
 
             # Only check nontrivial snippets (> 3 characters) to avoid false positives
-            # on very short strings that may appear as substrings of unrelated words
             if snippet and len(snippet) > 3:
-                # Disallow finding's original value if found verbatim in text
                 if snippet.lower() in full_extracted:
                     # Clean up failed artifact
                     try:
