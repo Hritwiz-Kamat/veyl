@@ -36,6 +36,7 @@ export interface Finding {
   source: string;
   selected_by_default: boolean;
   bounding_boxes?: BoundingBox[];
+  page_number?: number;
 }
 
 export interface AnalyzeTextRequest {
@@ -60,6 +61,7 @@ export interface FileMetadata {
   size_bytes: number;
   image_width?: number;
   image_height?: number;
+  page_count?: number;
 }
 
 export interface AnalyzeFileResponse {

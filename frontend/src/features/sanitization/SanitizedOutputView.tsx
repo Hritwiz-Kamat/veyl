@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Check, AlertTriangle, ArrowLeft, RefreshCw, ShieldCheck, Download, ImageIcon } from 'lucide-react';
+import { Copy, Check, AlertTriangle, ArrowLeft, RefreshCw, ShieldCheck, Download, ImageIcon, FileText } from 'lucide-react';
 import type { SanitizeResponse } from '../../types';
 
 interface SanitizedOutputViewProps {
@@ -59,23 +59,33 @@ export function SanitizedOutputView({
         </div>
       )}
 
-      {/* Artifact Download Banner for Images */}
+      {/* Artifact Download Banner for Images and PDFs */}
       {artifactUrl && (
         <div className="p-4 rounded-xl border border-violet-500/30 bg-violet-950/30 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 text-xs text-violet-200">
-            <ImageIcon className="w-5 h-5 text-violet-400 shrink-0" />
+            {fileType === 'pdf' ? (
+              <FileText className="w-5 h-5 text-violet-400 shrink-0" />
+            ) : (
+              <ImageIcon className="w-5 h-5 text-violet-400 shrink-0" />
+            )}
             <div>
-              <span className="font-semibold block text-zinc-100">Redacted Image Artifact Ready</span>
-              <span className="text-zinc-400">Pixels were permanently masked with Pillow; EXIF metadata stripped.</span>
+              <span className="font-semibold block text-zinc-100">
+                {fileType === 'pdf' ? 'Redacted PDF Document Ready' : 'Redacted Image Artifact Ready'}
+              </span>
+              <span className="text-zinc-400">
+                {fileType === 'pdf'
+                  ? 'Approved text & vector elements were permanently purged and verified.'
+                  : 'Pixels were permanently masked with Pillow; EXIF metadata stripped.'}
+              </span>
             </div>
           </div>
           <a
             href={artifactUrl}
-            download="sanitized_image.png"
+            download={fileType === 'pdf' ? 'sanitized_document.pdf' : 'sanitized_image.png'}
             className="px-3.5 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 cursor-pointer shrink-0"
           >
             <Download className="w-3.5 h-3.5" />
-            Download Masked Image
+            {fileType === 'pdf' ? 'Download Redacted PDF' : 'Download Masked Image'}
           </a>
         </div>
       )}

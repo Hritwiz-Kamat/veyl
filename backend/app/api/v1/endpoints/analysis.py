@@ -19,6 +19,7 @@ from app.schemas.analysis import (
 )
 from app.services.analysis_service import AnalysisService
 from app.processors.image_processor import ImageProcessor
+from app.processors.pdf_processor import PdfProcessor
 from app.storage.session_store import SessionStore
 from app.core.config import settings
 
@@ -51,8 +52,8 @@ async def analyze_text(request: AnalyzeTextRequest) -> AnalyzeTextResponse:
     "/analyze/file",
     response_model=AnalyzeFileResponse,
     status_code=status.HTTP_200_OK,
-    summary="Analyze uploaded file (image)",
-    description="Validates image, performs structured OCR, detects sensitive entities, and maps character spans to bounding boxes.",
+    summary="Analyze uploaded file (image or PDF)",
+    description="Validates image or PDF, extracts text/OCR, detects sensitive entities, and maps character spans to bounding boxes.",
     tags=["analysis"],
 )
 async def analyze_file(file: UploadFile = File(...)) -> AnalyzeFileResponse:
@@ -68,16 +69,68 @@ async def analyze_file(file: UploadFile = File(...)) -> AnalyzeFileResponse:
             detail=f"File exceeds maximum allowed size of {settings.MAX_UPLOAD_BYTES // (1024 * 1024)}MB.",
         )
 
-    # 1. Validate image bytes and format
+    filename_lower = (file.filename or "").lower()
+    is_pdf = content.startswith(b"%PDF-") or filename_lower.endswith(".pdf") or file.content_type == "application/pdf"
+
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+
+    # ── Handle PDF File ───────────────────────────────────────────────────────
+    if is_pdf:
+        pdf_val = PdfProcessor.validate_pdf(content)
+        if not pdf_val.is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=pdf_val.error_message or "Invalid or corrupted PDF file.",
+            )
+
+        temp_filename = f"{uuid.uuid4().hex}.pdf"
+        temp_path = os.path.join(settings.UPLOAD_DIR, temp_filename)
+        with open(temp_path, "wb") as f:
+            f.write(content)
+
+        extraction_result = PdfProcessor.extract_and_analyze(content, _analysis_service.registry)
+
+        session_id = _session_store.create_file_session(
+            file_path=temp_path,
+            file_type="pdf",
+            text=extraction_result.extracted_text,
+            findings=extraction_result.findings,
+        )
+
+        has_credentials = any(f.severity == "critical" for f in extraction_result.findings)
+        entity_counts = dict(Counter(f.entity_type for f in extraction_result.findings))
+        stats = AnalysisStats(
+            total_findings=len(extraction_result.findings),
+            has_credentials=has_credentials,
+            entity_counts=entity_counts,
+        )
+
+        metadata = FileMetadata(
+            filename=file.filename or temp_filename,
+            content_type="PDF",
+            size_bytes=len(content),
+            page_count=extraction_result.page_count,
+        )
+
+        return AnalyzeFileResponse(
+            session_id=session_id,
+            file_type="pdf",
+            metadata=metadata,
+            extracted_text=extraction_result.extracted_text,
+            findings=extraction_result.findings,
+            stats=stats,
+            is_incomplete_scan=extraction_result.is_incomplete,
+            scan_warning=extraction_result.scan_warning,
+        )
+
+    # ── Handle Image File ─────────────────────────────────────────────────────
     val_result = ImageProcessor.validate_image(content)
     if not val_result.is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=val_result.error_message or "Unsupported or invalid file format.",
+            detail=val_result.error_message or "Unsupported or invalid file format. Allowed: PNG, JPEG, WEBP, PDF.",
         )
 
-    # 2. Save temporary upload safely
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     ext = (val_result.format_name or "png").lower()
     temp_filename = f"{uuid.uuid4().hex}.{ext}"
     temp_path = os.path.join(settings.UPLOAD_DIR, temp_filename)
@@ -85,18 +138,14 @@ async def analyze_file(file: UploadFile = File(...)) -> AnalyzeFileResponse:
     with open(temp_path, "wb") as f:
         f.write(content)
 
-    # 3. OCR extraction with word-level coordinates
     with Image.open(BytesIO(content)) as img:
         ocr_text, ocr_words, is_complete, scan_warning = ImageProcessor.extract_words_and_text(img)
 
-    # 4. Run detection registry on extracted text
     findings = _analysis_service.registry.analyze(ocr_text) if ocr_text else []
 
-    # 5. Map detected text spans to OCR word bounding boxes
     if findings and ocr_words:
         findings = ImageProcessor.map_findings_to_boxes(findings, ocr_words)
 
-    # 6. Store session
     session_id = _session_store.create_file_session(
         file_path=temp_path,
         file_type="image",
@@ -105,7 +154,6 @@ async def analyze_file(file: UploadFile = File(...)) -> AnalyzeFileResponse:
         dimensions=(val_result.width, val_result.height),
     )
 
-    # 7. Compute statistics
     has_credentials = any(f.severity == "critical" for f in findings)
     entity_counts = dict(Counter(f.entity_type for f in findings))
     stats = AnalysisStats(

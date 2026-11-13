@@ -29,3 +29,8 @@ class Finding(BaseModel):
         default=None,
         description="Bounding boxes in original image coordinates for visual redaction"
     )
+    page_number: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="1-based page number for multi-page documents/PDFs"
+    )

@@ -29,6 +29,7 @@ class FileMetadata(BaseModel):
     size_bytes: int
     image_width: Optional[int] = None
     image_height: Optional[int] = None
+    page_count: Optional[int] = None
 
 
 class AnalyzeFileResponse(BaseModel):
