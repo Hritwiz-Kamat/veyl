@@ -21,6 +21,8 @@ class SessionData(BaseModel):
     original_file_path: Optional[str] = None
     artifact_id: Optional[str] = None
     artifact_file_path: Optional[str] = None
+    sanitized_text: Optional[str] = None
+    has_unredacted_credentials: bool = False
     image_dimensions: Optional[Tuple[int, int]] = None
     findings: Dict[str, Finding] = Field(default_factory=dict)
     created_at: datetime
@@ -103,6 +105,14 @@ class SessionStore:
             if session:
                 session.artifact_id = artifact_id
                 session.artifact_file_path = artifact_path
+
+    def set_sanitized_text(self, session_id: str, sanitized_text: str, has_unredacted_credentials: bool = False) -> None:
+        """Stores the sanitized text and credential warning status in the session."""
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session:
+                session.sanitized_text = sanitized_text
+                session.has_unredacted_credentials = has_unredacted_credentials
 
     def get_session(self, session_id: str) -> Optional[SessionData]:
         """Retrieves session if valid and not expired."""

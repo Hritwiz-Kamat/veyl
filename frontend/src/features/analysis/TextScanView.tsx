@@ -204,6 +204,7 @@ export function TextScanView() {
       {/* If sanitization result is ready, display SanitizedOutputView */}
       {sanitizeResult !== null ? (
         <SanitizedOutputView
+          sessionId={sessionId}
           originalText={inputText}
           sanitizeResult={sanitizeResult}
           fileType={activeMode}

@@ -9,4 +9,4 @@
 | M5 | Image OCR + pixel masking | ✅ Done |
 | M6 | PDF extraction + true redaction | ✅ Done |
 | M7 | Integration hardening, tests, error states | ✅ Done |
-| M8 | Demo handoff (manual copy + optional mock provider) | ⏳ Next |
+| M8 | Demo handoff (manual copy + optional mock provider) | ✅ Done |

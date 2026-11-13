@@ -94,3 +94,4 @@ def test_pdf_full_lifecycle():
     # Verification: artifact should now be gone
     gone_resp = client.get(f"/api/v1/sessions/{session_id}/artifact/{artifact_id}")
     assert gone_resp.status_code == 404
+

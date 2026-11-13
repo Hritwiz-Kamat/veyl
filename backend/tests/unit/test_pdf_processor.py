@@ -97,3 +97,4 @@ def test_extract_scanned_page_pdf():
 
     assert result.page_count == 1
     assert result.extracted_text != ""
+

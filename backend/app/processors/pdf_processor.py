@@ -216,3 +216,4 @@ class PdfProcessor:
             is_incomplete=is_incomplete,
             scan_warning=combined_warning,
         )
+

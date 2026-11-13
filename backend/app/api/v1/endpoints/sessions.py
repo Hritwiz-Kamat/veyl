@@ -140,6 +140,13 @@ async def sanitize_session(session_id: str, request: SanitizeRequest) -> Sanitiz
     ]
     has_unredacted_credentials = any(f.severity == "critical" for f in skipped_findings)
 
+    # Persist sanitized result in session for downstream handoff
+    _session_store.set_sanitized_text(
+        session_id=session_id,
+        sanitized_text=sanitized_text,
+        has_unredacted_credentials=has_unredacted_credentials,
+    )
+
     return SanitizeResponse(
         sanitized_text=sanitized_text,
         applied_count=len(approved_findings),

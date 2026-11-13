@@ -99,3 +99,35 @@ export interface SessionResponse {
   expires_at: string;
   artifact_id?: string;
 }
+
+// ── AI Handoff (M8) ───────────────────────────────────────────────────────────
+export interface HandoffPrepareRequest {
+  session_id: string;
+  destination: string;
+}
+
+export interface HandoffPrepareResponse {
+  session_id: string;
+  destination: string;
+  destination_name: string;
+  sanitized_content: string;
+  char_count: number;
+  has_unredacted_credentials: boolean;
+  can_handoff: boolean;
+  warning?: string;
+}
+
+export interface HandoffSendRequest {
+  session_id: string;
+  destination: string;
+  confirmed: boolean;
+}
+
+export interface HandoffSendResponse {
+  session_id: string;
+  destination: string;
+  provider_name: string;
+  status: string;
+  simulated_response: string;
+  timestamp: string;
+}
