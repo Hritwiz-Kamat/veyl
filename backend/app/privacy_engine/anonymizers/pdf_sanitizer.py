@@ -87,11 +87,22 @@ class PdfSanitizer:
                             )
                             page.add_redact_annot(rect, fill=(0, 0, 0))
 
-                    # Method B: Search directly on page for exact snippet to catch any missed glyphs
+                    # Method B: Search directly on page for exact snippet
                     if snippet and len(snippet) >= 2:
-                        for r in page.search_for(snippet):
+                        hits = page.search_for(snippet)
+                        for r in hits:
                             pad_rect = pymupdf.Rect(r.x0 - 1, r.y0 - 1, r.x1 + 1, r.y1 + 1)
                             page.add_redact_annot(pad_rect, fill=(0, 0, 0))
+
+                        # Method C: If exact search found nothing, try word-by-word
+                        # This handles cases where text spans multiple internal runs/lines
+                        if not hits:
+                            words = snippet.split()
+                            for word in words:
+                                if len(word) >= 2:
+                                    for r in page.search_for(word):
+                                        pad_rect = pymupdf.Rect(r.x0 - 1, r.y0 - 1, r.x1 + 1, r.y1 + 1)
+                                        page.add_redact_annot(pad_rect, fill=(0, 0, 0))
 
                 # Apply true destructive redaction (both text stream and image pixels)
                 page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_PIXELS)
@@ -156,8 +167,9 @@ class PdfSanitizer:
             else:
                 snippet = ""
 
-            # Only check nontrivial snippets (> 2 characters)
-            if snippet and len(snippet) > 2:
+            # Only check nontrivial snippets (> 3 characters) to avoid false positives
+            # on very short strings that may appear as substrings of unrelated words
+            if snippet and len(snippet) > 3:
                 # Disallow finding's original value if found verbatim in text
                 if snippet.lower() in full_extracted:
                     # Clean up failed artifact
@@ -166,6 +178,10 @@ class PdfSanitizer:
                     except OSError:
                         pass
                     snippet_preview = snippet if len(snippet) <= 10 else f"{snippet[:10]}..."
+                    logger.error(
+                        f"Verification failure: '{snippet}' (type={f.entity_type}) "
+                        f"still found in redacted PDF"
+                    )
                     raise PdfVerificationError(
                         f"Redaction verification failed: sensitive content for finding '{f.id}' "
                         f"({f.entity_type}: '{snippet_preview}') was still recoverable in output PDF."
