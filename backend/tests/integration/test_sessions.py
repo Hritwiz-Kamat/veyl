@@ -106,3 +106,4 @@ def test_session_lifecycle_and_deletion():
         json={"approved_finding_ids": []},
     )
     assert sanitize_resp.status_code == 404
+

@@ -18,3 +18,4 @@ export async function sanitizeSession(
 export async function deleteSession(sessionId: string): Promise<void> {
   return apiClient.delete<void>(`/sessions/${sessionId}`);
 }
+

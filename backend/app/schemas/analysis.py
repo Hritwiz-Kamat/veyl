@@ -22,3 +22,21 @@ class AnalyzeTextResponse(BaseModel):
     findings: List[Finding] = Field(default_factory=list, description="Ordered list of non-overlapping findings")
     stats: Optional[AnalysisStats] = Field(None, description="Summary statistics for UI display")
 
+
+class FileMetadata(BaseModel):
+    filename: str
+    content_type: str
+    size_bytes: int
+    image_width: Optional[int] = None
+    image_height: Optional[int] = None
+
+
+class AnalyzeFileResponse(BaseModel):
+    session_id: str = Field(..., description="Short-lived session identifier")
+    file_type: str = Field(..., description="Detected file category: image or pdf")
+    metadata: FileMetadata = Field(..., description="Validated file metadata")
+    extracted_text: str = Field(..., description="OCR or selectable extracted text")
+    findings: List[Finding] = Field(default_factory=list, description="Findings with bounding coordinates")
+    stats: Optional[AnalysisStats] = Field(None, description="Detection statistics")
+    is_incomplete_scan: bool = Field(False, description="True if OCR was partial or unavailable")
+    scan_warning: Optional[str] = Field(None, description="Warning message if scan was incomplete")

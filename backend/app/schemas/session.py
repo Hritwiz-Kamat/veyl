@@ -24,10 +24,15 @@ class SanitizeResponse(BaseModel):
         False,
         description="Warning flag if any critical secrets were excluded from approved_finding_ids"
     )
+    artifact_id: Optional[str] = Field(None, description="Unique artifact ID for downloadable sanitized file")
+    artifact_download_url: Optional[str] = Field(None, description="Relative URL to download sanitized artifact")
 
 
 class SessionResponse(BaseModel):
     session_id: str = Field(..., description="Unique session identifier")
+    file_type: str = Field(default="text", description="Type of session content: text, image, pdf")
+    original_file_path: Optional[str] = Field(None, description="Server-side path to original uploaded file if any")
     findings: List[Finding] = Field(default_factory=list, description="All detected findings for this session")
     created_at: datetime = Field(..., description="Timestamp of session creation")
     expires_at: datetime = Field(..., description="Timestamp when session expires")
+    artifact_id: Optional[str] = Field(None, description="Sanitized artifact ID if produced")

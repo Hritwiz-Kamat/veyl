@@ -1,12 +1,12 @@
 /**
- * App — top-level application shell for M1-M4.
+ * App — top-level application shell for M1-M5.
  *
- * M4 adds live approval & sanitization:
- *   - Interactive finding review with individual selection
- *   - Server-side right-to-left text redaction
- *   - Side-by-side or tabbed comparison view
- *   - Copy sanitized prompt to clipboard
- *   - Warnings for unredacted credentials and partial sanitization
+ * M5 adds live image processing & pixel-level masking:
+ *   - File upload validation (PNG, JPEG, WEBP)
+ *   - Structured Tesseract OCR word-level box extraction
+ *   - Character-span to bounding-box mapping
+ *   - Server-side opaque pixel-level redaction using Pillow
+ *   - Stripped metadata and downloadable sanitized artifact
  */
 import { Shield, Sparkles, FileText, Image, CheckCheck } from 'lucide-react';
 import { BackendStatus } from './components/ui/BackendStatus';
@@ -40,8 +40,8 @@ export default function App() {
             AI Privacy Layer
           </h1>
           <p className="text-zinc-400 text-sm sm:text-base leading-relaxed">
-            Scan your prompt for sensitive PII and secrets, review findings with full
-            approval control, and copy clean sanitized text into ChatGPT, Claude, or Cursor.
+            Scan text prompts or upload images. Detect sensitive PII and secrets, review findings,
+            and generate sanitized text or pixel-redacted image files ready for AI tools.
           </p>
         </div>
 
@@ -66,8 +66,8 @@ export default function App() {
               icon: <Image className="w-4 h-4 text-sky-400" />,
               title: 'Image Masking',
               desc: 'OCR + pixel redaction',
-              milestone: 'M5',
-              active: false,
+              milestone: 'M5 (Active)',
+              active: true,
             },
             {
               icon: <FileText className="w-4 h-4 text-amber-400" />,
@@ -103,14 +103,14 @@ export default function App() {
           ))}
         </div>
 
-        {/* Active M3+M4 Text Scan & Review View */}
+        {/* Active M3+M4+M5 Scan & Review View */}
         <TextScanView />
 
       </main>
 
       {/* ── Footer ── */}
       <footer className="border-t border-zinc-800 px-6 py-3 flex items-center justify-between text-xs text-zinc-600">
-        <span>M1 to M4 complete — approval & text sanitization active</span>
+        <span>M1 to M5 complete — image OCR and pixel-level redaction active</span>
         <span>No data sent externally · Local processing only</span>
       </footer>
 

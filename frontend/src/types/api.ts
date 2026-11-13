@@ -18,6 +18,13 @@ export interface ApiError {
 // ── Analysis ──────────────────────────────────────────────────────────────────
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 
+export interface BoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface Finding {
   id: string;
   entity_type: string;
@@ -28,6 +35,7 @@ export interface Finding {
   confidence: number | null;
   source: string;
   selected_by_default: boolean;
+  bounding_boxes?: BoundingBox[];
 }
 
 export interface AnalyzeTextRequest {
@@ -46,7 +54,26 @@ export interface AnalyzeTextResponse {
   stats?: AnalysisStats;
 }
 
-// ── Sanitization & Sessions (M4) ──────────────────────────────────────────────
+export interface FileMetadata {
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  image_width?: number;
+  image_height?: number;
+}
+
+export interface AnalyzeFileResponse {
+  session_id: string;
+  file_type: string;
+  metadata: FileMetadata;
+  extracted_text: string;
+  findings: Finding[];
+  stats?: AnalysisStats;
+  is_incomplete_scan: boolean;
+  scan_warning?: string;
+}
+
+// ── Sanitization & Sessions ───────────────────────────────────────────────────
 export interface SanitizeRequest {
   approved_finding_ids: string[];
 }
@@ -57,11 +84,16 @@ export interface SanitizeResponse {
   skipped_count: number;
   all_sanitized: boolean;
   has_unredacted_credentials: boolean;
+  artifact_id?: string;
+  artifact_download_url?: string;
 }
 
 export interface SessionResponse {
   session_id: string;
+  file_type: string;
+  original_file_path?: string;
   findings: Finding[];
   created_at: string;
   expires_at: string;
+  artifact_id?: string;
 }

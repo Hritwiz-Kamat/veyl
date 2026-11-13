@@ -1,11 +1,28 @@
-import { useState } from 'react';
-import { Sparkles, AlertTriangle, CheckCircle, Search, RefreshCw, CheckSquare, Square, Shield } from 'lucide-react';
-import { analyzeText, sanitizeSession, deleteSession } from '../../services/api';
-import type { Finding, SanitizeResponse } from '../../types';
+import { useState, useRef } from 'react';
+import {
+  Sparkles,
+  AlertTriangle,
+  CheckCircle,
+  Search,
+  RefreshCw,
+  CheckSquare,
+  Square,
+  Shield,
+  Upload,
+  FileText,
+  ImageIcon,
+} from 'lucide-react';
+import { analyzeText, analyzeFile, sanitizeSession, deleteSession } from '../../services/api';
+import type { Finding, SanitizeResponse, FileMetadata } from '../../types';
 import { SanitizedOutputView } from '../sanitization/SanitizedOutputView';
 
 export function TextScanView() {
+  const [activeMode, setActiveMode] = useState<'text' | 'image'>('text');
   const [inputText, setInputText] = useState('');
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+  const [fileMetadata, setFileMetadata] = useState<FileMetadata | null>(null);
+
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [isSanitizing, setIsSanitizing] = useState(false);
@@ -13,29 +30,75 @@ export function TextScanView() {
   const [selectedFindingIds, setSelectedFindingIds] = useState<Set<string>>(new Set());
   const [sanitizeResult, setSanitizeResult] = useState<SanitizeResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [scanWarning, setScanWarning] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const samplePrompt =
     "Hello, my name is Alice Smith and my email is alice@example.com. My OpenAI key is sk-live1234567890abcdefghijklmnopqrstuvwxyz. Please help me refactor my server at 192.168.1.50.";
 
-  const handleScan = async (e?: React.FormEvent) => {
+  const handleScanText = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!inputText.trim()) return;
 
     setIsScanning(true);
     setErrorMessage(null);
+    setScanWarning(null);
     setSanitizeResult(null);
 
     try {
       const response = await analyzeText({ text: inputText });
       setSessionId(response.session_id);
       setFindings(response.findings);
-      // Pre-select all findings by default
       const defaultSelected = new Set(
         response.findings.filter((f) => f.selected_by_default).map((f) => f.id)
       );
       setSelectedFindingIds(defaultSelected);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to analyze text. Please ensure backend is running.';
+      const msg = err instanceof Error ? err.message : 'Failed to analyze text.';
+      setErrorMessage(msg);
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadedFile(file);
+    setFilePreviewUrl(URL.createObjectURL(file));
+    setFindings(null);
+    setSanitizeResult(null);
+    setErrorMessage(null);
+    setScanWarning(null);
+  };
+
+  const handleScanFile = async () => {
+    if (!uploadedFile) return;
+
+    setIsScanning(true);
+    setErrorMessage(null);
+    setScanWarning(null);
+    setSanitizeResult(null);
+
+    try {
+      const response = await analyzeFile(uploadedFile);
+      setSessionId(response.session_id);
+      setFileMetadata(response.metadata);
+      setInputText(response.extracted_text);
+      setFindings(response.findings);
+
+      if (response.is_incomplete_scan && response.scan_warning) {
+        setScanWarning(response.scan_warning);
+      }
+
+      const defaultSelected = new Set(
+        response.findings.filter((f) => f.selected_by_default).map((f) => f.id)
+      );
+      setSelectedFindingIds(defaultSelected);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to analyze image file.';
       setErrorMessage(msg);
     } finally {
       setIsScanning(false);
@@ -90,12 +153,19 @@ export function TextScanView() {
         // Ignore session cleanup errors
       }
     }
+    if (filePreviewUrl) {
+      URL.revokeObjectURL(filePreviewUrl);
+    }
     setInputText('');
+    setUploadedFile(null);
+    setFilePreviewUrl(null);
+    setFileMetadata(null);
     setSessionId(null);
     setFindings(null);
     setSelectedFindingIds(new Set());
     setSanitizeResult(null);
     setErrorMessage(null);
+    setScanWarning(null);
   };
 
   const getSeverityBadgeClass = (severity: string) => {
@@ -123,69 +193,196 @@ export function TextScanView() {
         <SanitizedOutputView
           originalText={inputText}
           sanitizeResult={sanitizeResult}
+          fileType={activeMode}
           onEditSelection={() => setSanitizeResult(null)}
           onNewScan={handleReset}
         />
       ) : (
         <>
-          {/* Input Form */}
-          <form onSubmit={handleScan} className="flex flex-col gap-3">
-            <div className="relative">
-              <textarea
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Paste prompt or text to analyze for PII and credentials..."
-                rows={4}
-                disabled={isScanning || isSanitizing}
-                className="w-full rounded-xl border border-zinc-700 bg-zinc-900/90 p-4 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-colors resize-y min-h-[110px]"
-              />
-            </div>
+          {/* Mode Switcher Tabs */}
+          <div className="flex items-center gap-2 border-b border-zinc-800 pb-2">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveMode('text');
+                setErrorMessage(null);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
+                activeMode === 'text'
+                  ? 'bg-violet-600/20 text-violet-300 border border-violet-500/40'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Text Prompt Scan
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveMode('image');
+                setErrorMessage(null);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
+                activeMode === 'image'
+                  ? 'bg-violet-600/20 text-violet-300 border border-violet-500/40'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+              }`}
+            >
+              <ImageIcon className="w-3.5 h-3.5" />
+              Image Masking (M5)
+            </button>
+          </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setInputText(samplePrompt);
-                  setFindings(null);
-                  setSanitizeResult(null);
-                }}
-                className="text-xs text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors cursor-pointer"
-              >
-                Load sample prompt with PII & secrets
-              </button>
-
-              <div className="flex items-center gap-2">
-                {findings !== null && (
-                  <button
-                    type="button"
-                    onClick={handleReset}
-                    className="px-3 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700 transition-colors cursor-pointer flex items-center gap-1.5"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    Reset
-                  </button>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={isScanning || isSanitizing || !inputText.trim()}
-                  className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium text-white transition-all shadow-sm hover:shadow-violet-500/25 flex items-center gap-2 cursor-pointer"
-                >
-                  {isScanning ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      Analyzing...
-                    </>
-                  ) : (
-                    <>
-                      <Search className="w-3.5 h-3.5" />
-                      Scan Text
-                    </>
-                  )}
-                </button>
+          {/* Text Mode */}
+          {activeMode === 'text' && (
+            <form onSubmit={handleScanText} className="flex flex-col gap-3">
+              <div className="relative">
+                <textarea
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder="Paste prompt or text to analyze for PII and credentials..."
+                  rows={4}
+                  disabled={isScanning || isSanitizing}
+                  className="w-full rounded-xl border border-zinc-700 bg-zinc-900/90 p-4 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-colors resize-y min-h-[110px]"
+                />
               </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInputText(samplePrompt);
+                    setFindings(null);
+                    setSanitizeResult(null);
+                  }}
+                  className="text-xs text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors cursor-pointer"
+                >
+                  Load sample prompt with PII & secrets
+                </button>
+
+                <div className="flex items-center gap-2">
+                  {findings !== null && (
+                    <button
+                      type="button"
+                      onClick={handleReset}
+                      className="px-3 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700 transition-colors cursor-pointer flex items-center gap-1.5"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      Reset
+                    </button>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isScanning || isSanitizing || !inputText.trim()}
+                    className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium text-white transition-all shadow-sm hover:shadow-violet-500/25 flex items-center gap-2 cursor-pointer"
+                  >
+                    {isScanning ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-3.5 h-3.5" />
+                        Scan Text
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+
+          {/* Image Mode */}
+          {activeMode === 'image' && (
+            <div className="flex flex-col gap-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+
+              {!uploadedFile ? (
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-8 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-violet-500 hover:bg-violet-950/10 transition-all text-center"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+                    <Upload className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-zinc-200">Click to upload image file</p>
+                    <p className="text-xs text-zinc-500 mt-1">PNG, JPG, or WEBP (Max 10MB)</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <ImageIcon className="w-4 h-4 text-violet-400" />
+                      <span className="text-xs font-medium text-zinc-200 truncate max-w-xs">
+                        {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)} KB)
+                      </span>
+                      {fileMetadata && (
+                        <span className="text-[10px] text-zinc-400 font-mono bg-zinc-800/60 px-1.5 py-0.5 rounded">
+                          {fileMetadata.image_width}×{fileMetadata.image_height} {fileMetadata.content_type}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUploadedFile(null);
+                        setFilePreviewUrl(null);
+                        setFindings(null);
+                      }}
+                      className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+                    >
+                      Change
+                    </button>
+                  </div>
+
+                  {filePreviewUrl && (
+                    <div className="relative rounded-lg overflow-hidden border border-zinc-800 bg-black flex justify-center max-h-60">
+                      <img src={filePreviewUrl} alt="Upload preview" className="object-contain h-full" />
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleScanFile}
+                      disabled={isScanning}
+                      className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-xs font-medium text-white transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+                    >
+                      {isScanning ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          Processing OCR & Scanning...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="w-3.5 h-3.5" />
+                          Analyze Image (M5)
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          </form>
+          )}
+
+          {/* Scan Warning (e.g. Incomplete scan notice) */}
+          {scanWarning && (
+            <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-200 text-xs flex items-center gap-2.5">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+              <span>{scanWarning}</span>
+            </div>
+          )}
 
           {/* Error state */}
           {errorMessage && (
@@ -239,7 +436,11 @@ export function TextScanView() {
                 <div className="py-6 flex flex-col items-center justify-center gap-2 text-center text-zinc-400">
                   <CheckCircle className="w-8 h-8 text-emerald-400" />
                   <p className="text-sm font-medium text-zinc-200">No sensitive entities found</p>
-                  <p className="text-xs text-zinc-500">The provided text did not trigger any PII or secret recognizers.</p>
+                  <p className="text-xs text-zinc-500">
+                    {activeMode === 'image'
+                      ? 'No sensitive entities detected in extracted OCR text.'
+                      : 'The provided text did not trigger any PII or secret recognizers.'}
+                  </p>
                 </div>
               ) : (
                 <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
@@ -272,6 +473,11 @@ export function TextScanView() {
                           <span className="font-mono text-zinc-300 bg-zinc-800/80 px-1.5 py-0.5 rounded">
                             {f.entity_type}
                           </span>
+                          {f.bounding_boxes && f.bounding_boxes.length > 0 && (
+                            <span className="text-[10px] text-sky-400 bg-sky-950/60 border border-sky-800/50 px-1.5 py-0.5 rounded font-mono">
+                              {f.bounding_boxes.length} box(es)
+                            </span>
+                          )}
                           <span className="text-zinc-400 font-mono truncate max-w-xs" title={snippet}>
                             "{snippet}"
                           </span>
@@ -298,7 +504,9 @@ export function TextScanView() {
               {findings.length > 0 && (
                 <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
                   <span className="text-xs text-zinc-500">
-                    Only checked items will be replaced. Unchecked text remains unchanged.
+                    {activeMode === 'image'
+                      ? 'Approved regions will have opaque black pixels applied permanently.'
+                      : 'Only checked items will be replaced.'}
                   </span>
                   <button
                     type="button"
@@ -314,7 +522,7 @@ export function TextScanView() {
                     ) : (
                       <>
                         <Shield className="w-3.5 h-3.5" />
-                        Apply Sanitization (M4)
+                        {activeMode === 'image' ? 'Redact Image (M5)' : 'Apply Sanitization (M4)'}
                       </>
                     )}
                   </button>

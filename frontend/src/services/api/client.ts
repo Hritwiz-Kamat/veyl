@@ -22,13 +22,18 @@ async function request<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const url = `${BASE_URL}${path}`;
+
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+    ...(options.headers as Record<string, string> ?? {}),
+  };
+
   const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      ...(options.headers ?? {}),
-    },
     ...options,
+    headers,
   });
 
   if (!response.ok) {
@@ -55,6 +60,11 @@ export const apiClient = {
     request<T>(path, {
       method: 'POST',
       body: JSON.stringify(body),
+    }),
+  upload: <T>(path: string, formData: FormData) =>
+    request<T>(path, {
+      method: 'POST',
+      body: formData,
     }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };

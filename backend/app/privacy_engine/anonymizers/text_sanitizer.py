@@ -44,3 +44,4 @@ class TextSanitizer:
             sanitized = sanitized[:f.start] + f.replacement + sanitized[f.end:]
 
         return sanitized
+
