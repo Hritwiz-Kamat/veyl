@@ -1,13 +1,14 @@
 /**
- * App — top-level application shell for M1/M2/M3.
+ * App — top-level application shell for M1-M4.
  *
- * M3 adds live real text detection with:
- *   - Local Microsoft Presidio (en_core_web_sm)
- *   - Custom regex recognizers (SSN, IPv4, Credit Cards)
- *   - Secret detection (OpenAI, AWS, GitHub, Slack, Private Keys, Passwords)
- *   - Overlap resolution, consistent placeholders, and session generation.
+ * M4 adds live approval & sanitization:
+ *   - Interactive finding review with individual selection
+ *   - Server-side right-to-left text redaction
+ *   - Side-by-side or tabbed comparison view
+ *   - Copy sanitized prompt to clipboard
+ *   - Warnings for unredacted credentials and partial sanitization
  */
-import { Shield, Sparkles, FileText, Image } from 'lucide-react';
+import { Shield, Sparkles, FileText, Image, CheckCheck } from 'lucide-react';
 import { BackendStatus } from './components/ui/BackendStatus';
 import { TextScanView } from './features/analysis/TextScanView';
 
@@ -39,68 +40,78 @@ export default function App() {
             AI Privacy Layer
           </h1>
           <p className="text-zinc-400 text-sm sm:text-base leading-relaxed">
-            Paste a prompt or text snippet. Local offline detectors identify sensitive
-            PII and credentials, map consistent placeholders, and highlight risks before
-            any AI handoff.
+            Scan your prompt for sensitive PII and secrets, review findings with full
+            approval control, and copy clean sanitized text into ChatGPT, Claude, or Cursor.
           </p>
         </div>
 
         {/* Feature chips */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-2xl">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 w-full max-w-2xl">
           {[
             {
               icon: <Sparkles className="w-4 h-4 text-violet-400" />,
-              title: 'Text Detection',
-              desc: 'PII, secrets, keys & tokens',
+              title: 'Detection',
+              desc: 'PII, secrets & tokens',
               milestone: 'M3 (Active)',
               active: true,
             },
             {
+              icon: <CheckCheck className="w-4 h-4 text-emerald-400" />,
+              title: 'Sanitization',
+              desc: 'Review & copy output',
+              milestone: 'M4 (Active)',
+              active: true,
+            },
+            {
               icon: <Image className="w-4 h-4 text-sky-400" />,
-              title: 'Image Redaction',
-              desc: 'OCR + pixel-level masking',
+              title: 'Image Masking',
+              desc: 'OCR + pixel redaction',
               milestone: 'M5',
               active: false,
             },
             {
               icon: <FileText className="w-4 h-4 text-amber-400" />,
-              title: 'PDF Processing',
-              desc: 'Selectable text + true redaction',
+              title: 'PDF Redaction',
+              desc: 'Selectable text & pages',
               milestone: 'M6',
               active: false,
             },
           ].map((f) => (
             <div
               key={f.title}
-              className={`rounded-xl border p-4 flex flex-col gap-1.5 transition-colors ${
+              className={`rounded-xl border p-3.5 flex flex-col gap-1 transition-colors ${
                 f.active
                   ? 'border-violet-500/40 bg-violet-950/20 ring-1 ring-violet-500/20'
-                  : 'border-zinc-800 bg-zinc-900/50 opacity-70'
+                  : 'border-zinc-800 bg-zinc-900/50 opacity-60'
               }`}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 {f.icon}
-                <span className="text-sm font-medium text-zinc-200">
+                <span className="text-xs font-semibold text-zinc-200">
                   {f.title}
                 </span>
-                <span className={`ml-auto text-xs font-mono ${f.active ? 'text-violet-400 font-semibold' : 'text-zinc-600'}`}>
+                <span
+                  className={`ml-auto text-[10px] font-mono ${
+                    f.active ? 'text-violet-400 font-semibold' : 'text-zinc-600'
+                  }`}
+                >
                   {f.milestone}
                 </span>
               </div>
-              <p className="text-xs text-zinc-500">{f.desc}</p>
+              <p className="text-[11px] text-zinc-500">{f.desc}</p>
             </div>
           ))}
         </div>
 
-        {/* Active M3 Text Scan View */}
+        {/* Active M3+M4 Text Scan & Review View */}
         <TextScanView />
 
       </main>
 
       {/* ── Footer ── */}
       <footer className="border-t border-zinc-800 px-6 py-3 flex items-center justify-between text-xs text-zinc-600">
-        <span>M1 + M2 + M3 complete — real text detection & session store active</span>
-        <span>No data sent externally · 100% local detection</span>
+        <span>M1 to M4 complete — approval & text sanitization active</span>
+        <span>No data sent externally · Local processing only</span>
       </footer>
 
     </div>

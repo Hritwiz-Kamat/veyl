@@ -1,6 +1,6 @@
 /**
  * Shared API response types.
- * Keep in sync with backend Pydantic schemas.
+ * Kept in sync with backend Pydantic schemas.
  */
 
 // ── Health ────────────────────────────────────────────────────────────────────
@@ -15,7 +15,7 @@ export interface ApiError {
   detail: string;
 }
 
-// ── Future: Analysis (M3+) ────────────────────────────────────────────────────
+// ── Analysis ──────────────────────────────────────────────────────────────────
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 
 export interface Finding {
@@ -34,12 +34,19 @@ export interface AnalyzeTextRequest {
   text: string;
 }
 
+export interface AnalysisStats {
+  total_findings: number;
+  has_credentials: boolean;
+  entity_counts: Record<string, number>;
+}
+
 export interface AnalyzeTextResponse {
   session_id: string;
   findings: Finding[];
+  stats?: AnalysisStats;
 }
 
-// ── Future: Sanitization (M4+) ────────────────────────────────────────────────
+// ── Sanitization & Sessions (M4) ──────────────────────────────────────────────
 export interface SanitizeRequest {
   approved_finding_ids: string[];
 }
@@ -48,5 +55,13 @@ export interface SanitizeResponse {
   sanitized_text: string;
   applied_count: number;
   skipped_count: number;
+  all_sanitized: boolean;
+  has_unredacted_credentials: boolean;
 }
 
+export interface SessionResponse {
+  session_id: string;
+  findings: Finding[];
+  created_at: string;
+  expires_at: string;
+}

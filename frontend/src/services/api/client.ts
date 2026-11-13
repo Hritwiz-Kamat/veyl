@@ -42,6 +42,10 @@ async function request<T>(
     throw new ApiClientError(response.status, detail);
   }
 
+  if (response.status === 204) {
+    return undefined as unknown as T;
+  }
+
   return response.json() as Promise<T>;
 }
 

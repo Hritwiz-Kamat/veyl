@@ -44,37 +44,13 @@ Analyzes plain text prompts for PII, identifiers, and secrets using local offlin
       "confidence": 0.85,
       "source": "presidio",
       "selected_by_default": true
-    },
-    {
-      "id": "f8a2c10b...",
-      "entity_type": "EMAIL_ADDRESS",
-      "start": 46,
-      "end": 63,
-      "replacement": "[EMAIL_ADDRESS_1]",
-      "severity": "medium",
-      "confidence": 1.0,
-      "source": "presidio",
-      "selected_by_default": true
-    },
-    {
-      "id": "a9b1c2d3...",
-      "entity_type": "OPENAI_KEY",
-      "start": 70,
-      "end": 114,
-      "replacement": "[OPENAI_KEY_1]",
-      "severity": "critical",
-      "confidence": 0.95,
-      "source": "secret",
-      "selected_by_default": true
     }
   ],
   "stats": {
-    "total_findings": 3,
-    "has_credentials": true,
+    "total_findings": 1,
+    "has_credentials": false,
     "entity_counts": {
-      "PERSON": 1,
-      "EMAIL_ADDRESS": 1,
-      "OPENAI_KEY": 1
+      "PERSON": 1
     }
   }
 }
@@ -82,12 +58,55 @@ Analyzes plain text prompts for PII, identifiers, and secrets using local offlin
 
 ---
 
-## Planned endpoints (M4+)
+### GET /api/v1/sessions/{session_id}
+Retrieves session findings and TTL expiration metadata from server-side memory.
+
+**Response 200**
+```json
+{
+  "session_id": "4b5d4a70...",
+  "findings": [ ... ],
+  "created_at": "2026-11-13T20:00:00.000Z",
+  "expires_at": "2026-11-13T20:15:00.000Z"
+}
+```
+
+---
+
+### POST /api/v1/sessions/{session_id}/sanitize
+Applies approved finding transformations right-to-left onto the server-held original text.
+Clients send only approved finding IDs; original text is never accepted from the browser.
+
+**Request Body**
+```json
+{
+  "approved_finding_ids": ["e4f8b1c9..."]
+}
+```
+
+**Response 200**
+```json
+{
+  "sanitized_text": "Hello, my name is [PERSON_1] and my email is...",
+  "applied_count": 1,
+  "skipped_count": 0,
+  "all_sanitized": true,
+  "has_unredacted_credentials": false
+}
+```
+
+---
+
+### DELETE /api/v1/sessions/{session_id}
+Explicitly deletes session data and findings from memory ahead of TTL expiration.
+
+**Response 204 No Content**
+
+---
+
+## Planned endpoints (M5+)
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | /api/v1/analyze/file | Analyze uploaded file (M5/M6) |
-| GET | /api/v1/sessions/{id} | Get session state |
-| POST | /api/v1/sessions/{id}/sanitize | Apply approved findings (M4) |
+| POST | /api/v1/analyze/file | Analyze uploaded image or document (M5/M6) |
 | GET | /api/v1/sessions/{id}/artifact/{artifact_id} | Download sanitized artifact |
-| DELETE | /api/v1/sessions/{id} | Delete session and cleanup |
