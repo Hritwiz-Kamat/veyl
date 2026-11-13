@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import {
   Sparkles,
   AlertTriangle,
@@ -11,15 +12,30 @@ import {
   Upload,
   FileText,
   ImageIcon,
+  ArrowRight,
 } from 'lucide-react';
 import { analyzeText, analyzeFile, sanitizeSession, deleteSession } from '../../services/api';
 import type { Finding, SanitizeResponse, FileMetadata } from '../../types';
 import { SanitizedOutputView } from '../sanitization/SanitizedOutputView';
+import { useAudit } from '../../hooks/useAudit';
 
 export function TextScanView() {
-  const [activeMode, setActiveMode] = useState<'text' | 'image' | 'pdf'>('text');
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { setCurrentMaskingSession, addAuditLog } = useAudit();
+
+  const modeParam = (searchParams.get('mode') as 'text' | 'image' | 'pdf') || null;
+  const [explicitMode, setExplicitMode] = useState<'text' | 'image' | 'pdf' | null>(null);
+  const activeMode = explicitMode ?? modeParam ?? 'text';
+  const setActiveMode = (mode: 'text' | 'image' | 'pdf') => setExplicitMode(mode);
+
   const [selectedPage, setSelectedPage] = useState<number | 'all'>('all');
-  const [inputText, setInputText] = useState('');
+
+  const [inputText, setInputText] = useState(() => {
+    return (location.state as { initialText?: string })?.initialText || '';
+  });
+
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
   const [fileMetadata, setFileMetadata] = useState<FileMetadata | null>(null);
@@ -37,7 +53,7 @@ export function TextScanView() {
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const samplePrompt =
-    "Hello, my name is Alice Smith and my email is alice@example.com. My OpenAI key is sk-live1234567890abcdefghijklmnopqrstuvwxyz. Please help me refactor my server at 192.168.1.50.";
+    "Hello, my name is Alice Smith and my email is alice@example.com. My OpenAI key is sk-live1234567890abcdefghijklmnopqrstuvwxyz. Please help me refactor my server at 192.168.1.50 with password SuperSecret123!";
 
   const handleScanText = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -56,6 +72,14 @@ export function TextScanView() {
         response.findings.filter((f) => f.selected_by_default).map((f) => f.id)
       );
       setSelectedFindingIds(defaultSelected);
+
+      setCurrentMaskingSession({
+        sessionId: response.session_id,
+        fileType: 'text',
+        originalText: inputText,
+        findings: response.findings,
+        timestamp: new Date().toISOString(),
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to analyze text.';
       setErrorMessage(msg);
@@ -70,7 +94,8 @@ export function TextScanView() {
 
     setUploadedFile(file);
     if (file.type.startsWith('image/')) {
-      setFilePreviewUrl(URL.createObjectURL(file));
+      const url = URL.createObjectURL(file);
+      setFilePreviewUrl(url);
     } else {
       setFilePreviewUrl(null);
     }
@@ -109,6 +134,16 @@ export function TextScanView() {
         response.findings.filter((f) => f.selected_by_default).map((f) => f.id)
       );
       setSelectedFindingIds(defaultSelected);
+
+      setCurrentMaskingSession({
+        sessionId: response.session_id,
+        fileType: response.file_type as 'image' | 'pdf',
+        originalText: response.extracted_text,
+        originalFileName: uploadedFile.name,
+        originalFilePreviewUrl: filePreviewUrl || undefined,
+        findings: response.findings,
+        timestamp: new Date().toISOString(),
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to analyze uploaded file.';
       setErrorMessage(msg);
@@ -149,6 +184,27 @@ export function TextScanView() {
         approved_finding_ids: Array.from(selectedFindingIds),
       });
       setSanitizeResult(result);
+
+      // Record in Audit Context & recent session
+      setCurrentMaskingSession({
+        sessionId,
+        fileType: activeMode,
+        originalText: inputText,
+        originalFileName: uploadedFile?.name,
+        originalFilePreviewUrl: filePreviewUrl || undefined,
+        findings: findings || [],
+        sanitizeResult: result,
+        timestamp: new Date().toISOString(),
+      });
+
+      addAuditLog({
+        user: { name: 'Elizabeth Keen', role: 'Owner', initials: 'EK' },
+        entityId: `${sessionId.slice(0, 14)}...`,
+        action: 'SANITIZE',
+        type: activeMode === 'text' ? 'Text Prompt' : activeMode === 'image' ? 'Image Masking' : 'PDF Document',
+        environment: 'Master',
+        details: `Redacted ${result.applied_count} sensitive findings with verification`,
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Sanitization failed. Session may have expired.';
       setErrorMessage(msg);
@@ -184,13 +240,13 @@ export function TextScanView() {
   const getSeverityBadgeClass = (severity: string) => {
     switch (severity) {
       case 'critical':
-        return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+        return 'bg-rose-50 text-rose-600 border-rose-200';
       case 'high':
-        return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+        return 'bg-amber-50 text-amber-600 border-amber-200';
       case 'medium':
-        return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
+        return 'bg-yellow-50 text-yellow-600 border-yellow-200';
       default:
-        return 'bg-zinc-700/30 text-zinc-400 border-zinc-700';
+        return 'bg-gray-100 text-gray-600 border-gray-200';
     }
   };
 
@@ -200,7 +256,75 @@ export function TextScanView() {
     ).length ?? 0;
 
   return (
-    <div className="w-full max-w-2xl flex flex-col gap-5">
+    <div className="w-full max-w-4xl mx-auto flex flex-col gap-6">
+      {/* ── Mode Switcher Tabs ── */}
+      <div className="flex items-center justify-between border-b border-gray-200 pb-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveMode('text');
+              setErrorMessage(null);
+            }}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeMode === 'text'
+                ? 'bg-gray-950 text-white shadow-2xs'
+                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Text Prompt Scan</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveMode('image');
+              setErrorMessage(null);
+            }}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeMode === 'image'
+                ? 'bg-gray-950 text-white shadow-2xs'
+                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            <span>Image Masking</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveMode('pdf');
+              setErrorMessage(null);
+            }}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeMode === 'pdf'
+                ? 'bg-gray-950 text-white shadow-2xs'
+                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>PDF Redaction</span>
+          </button>
+        </div>
+
+        {sanitizeResult && (
+          <button
+            type="button"
+            onClick={() => {
+              if (activeMode === 'text') {
+                navigate('/text-output');
+              } else {
+                navigate('/document-output');
+              }
+            }}
+            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+          >
+            <span>View Dedicated Canvas</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
       {/* If sanitization result is ready, display SanitizedOutputView */}
       {sanitizeResult !== null ? (
         <SanitizedOutputView
@@ -213,55 +337,6 @@ export function TextScanView() {
         />
       ) : (
         <>
-          {/* Mode Switcher Tabs */}
-          <div className="flex items-center gap-2 border-b border-zinc-800 pb-2">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveMode('text');
-                setErrorMessage(null);
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
-                activeMode === 'text'
-                  ? 'bg-violet-600/20 text-violet-300 border border-violet-500/40'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5" />
-              Text Prompt Scan
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveMode('image');
-                setErrorMessage(null);
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
-                activeMode === 'image'
-                  ? 'bg-violet-600/20 text-violet-300 border border-violet-500/40'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
-              }`}
-            >
-              <ImageIcon className="w-3.5 h-3.5" />
-              Image Masking (M5)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveMode('pdf');
-                setErrorMessage(null);
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
-                activeMode === 'pdf'
-                  ? 'bg-violet-600/20 text-violet-300 border border-violet-500/40'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5" />
-              PDF Redaction (M6)
-            </button>
-          </div>
-
           {/* Text Mode */}
           {activeMode === 'text' && (
             <form onSubmit={handleScanText} className="flex flex-col gap-3">
@@ -270,9 +345,9 @@ export function TextScanView() {
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder="Paste prompt or text to analyze for PII and credentials..."
-                  rows={4}
+                  rows={5}
                   disabled={isScanning || isSanitizing}
-                  className="w-full rounded-xl border border-zinc-700 bg-zinc-900/90 p-4 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-colors resize-y min-h-[110px]"
+                  className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all resize-y min-h-[140px] shadow-2xs font-mono"
                 />
               </div>
 
@@ -284,7 +359,7 @@ export function TextScanView() {
                     setFindings(null);
                     setSanitizeResult(null);
                   }}
-                  className="text-xs text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors cursor-pointer"
+                  className="text-xs text-indigo-600 hover:text-indigo-700 underline underline-offset-2 transition-colors cursor-pointer font-medium"
                 >
                   Load sample prompt with PII & secrets
                 </button>
@@ -294,7 +369,7 @@ export function TextScanView() {
                     <button
                       type="button"
                       onClick={handleReset}
-                      className="px-3 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700 transition-colors cursor-pointer flex items-center gap-1.5"
+                      className="px-3 py-2 rounded-xl text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer flex items-center gap-1.5"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                       Reset
@@ -304,7 +379,7 @@ export function TextScanView() {
                   <button
                     type="submit"
                     disabled={isScanning || isSanitizing || !inputText.trim()}
-                    className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium text-white transition-all shadow-sm hover:shadow-violet-500/25 flex items-center gap-2 cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-[#18181b] hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium text-white transition-all shadow-xs flex items-center gap-2 cursor-pointer"
                   >
                     {isScanning ? (
                       <>
@@ -337,27 +412,32 @@ export function TextScanView() {
               {!uploadedFile ? (
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-8 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-violet-500 hover:bg-violet-950/10 transition-all text-center"
+                  className="rounded-2xl border-2 border-dashed border-gray-200 bg-white p-10 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-indigo-500 hover:bg-indigo-50/20 transition-all text-center shadow-2xs"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
                     <Upload className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-zinc-200">Click to upload image file</p>
-                    <p className="text-xs text-zinc-500 mt-1">PNG, JPG, or WEBP (Max 10MB)</p>
+                    <p className="text-sm font-semibold text-gray-800">
+                      Click to upload image file
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      PNG, JPG, or WEBP (Max 10MB) · Structured word OCR extraction
+                    </p>
                   </div>
                 </div>
               ) : (
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
+                <div className="rounded-2xl border border-gray-200 bg-white p-5 flex flex-col gap-4 shadow-2xs">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <ImageIcon className="w-4 h-4 text-violet-400" />
-                      <span className="text-xs font-medium text-zinc-200 truncate max-w-xs">
+                      <ImageIcon className="w-4 h-4 text-indigo-600" />
+                      <span className="text-xs font-semibold text-gray-800 truncate max-w-xs">
                         {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)} KB)
                       </span>
                       {fileMetadata && (
-                        <span className="text-[10px] text-zinc-400 font-mono bg-zinc-800/60 px-1.5 py-0.5 rounded">
-                          {fileMetadata.image_width}×{fileMetadata.image_height} {fileMetadata.content_type}
+                        <span className="text-[10px] text-gray-500 font-mono bg-gray-100 px-2 py-0.5 rounded-md">
+                          {fileMetadata.image_width}×{fileMetadata.image_height}{' '}
+                          {fileMetadata.content_type}
                         </span>
                       )}
                     </div>
@@ -368,15 +448,19 @@ export function TextScanView() {
                         setFilePreviewUrl(null);
                         setFindings(null);
                       }}
-                      className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+                      className="text-xs text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
                     >
                       Change
                     </button>
                   </div>
 
                   {filePreviewUrl && (
-                    <div className="relative rounded-lg overflow-hidden border border-zinc-800 bg-black flex justify-center max-h-60">
-                      <img src={filePreviewUrl} alt="Upload preview" className="object-contain h-full" />
+                    <div className="relative rounded-xl overflow-hidden border border-gray-100 bg-gray-50 flex justify-center max-h-64 p-2">
+                      <img
+                        src={filePreviewUrl}
+                        alt="Upload preview"
+                        className="object-contain h-full max-h-60 rounded-lg"
+                      />
                     </div>
                   )}
 
@@ -385,7 +469,7 @@ export function TextScanView() {
                       type="button"
                       onClick={handleScanFile}
                       disabled={isScanning}
-                      className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-xs font-medium text-white transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+                      className="px-4 py-2 rounded-xl bg-[#18181b] hover:bg-black disabled:opacity-50 text-xs font-medium text-white transition-all shadow-xs flex items-center gap-2 cursor-pointer"
                     >
                       {isScanning ? (
                         <>
@@ -395,7 +479,7 @@ export function TextScanView() {
                       ) : (
                         <>
                           <Search className="w-3.5 h-3.5" />
-                          Analyze Image (M5)
+                          Analyze Image
                         </>
                       )}
                     </button>
@@ -419,26 +503,30 @@ export function TextScanView() {
               {!uploadedFile ? (
                 <div
                   onClick={() => pdfInputRef.current?.click()}
-                  className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-8 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-violet-500 hover:bg-violet-950/10 transition-all text-center"
+                  className="rounded-2xl border-2 border-dashed border-gray-200 bg-white p-10 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-indigo-500 hover:bg-indigo-50/20 transition-all text-center shadow-2xs"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+                  <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600">
                     <FileText className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-zinc-200">Click to upload PDF document</p>
-                    <p className="text-xs text-zinc-500 mt-1">Selectable text & scanned page OCR fallback (Max 10MB)</p>
+                    <p className="text-sm font-semibold text-gray-800">
+                      Click to upload PDF document
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Selectable text & scanned page OCR fallback (Max 10MB)
+                    </p>
                   </div>
                 </div>
               ) : (
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col gap-3">
+                <div className="rounded-2xl border border-gray-200 bg-white p-5 flex flex-col gap-4 shadow-2xs">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <FileText className="w-4 h-4 text-violet-400" />
-                      <span className="text-xs font-medium text-zinc-200 truncate max-w-xs">
+                      <FileText className="w-4 h-4 text-rose-600" />
+                      <span className="text-xs font-semibold text-gray-800 truncate max-w-xs">
                         {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)} KB)
                       </span>
                       {fileMetadata?.page_count && (
-                        <span className="text-[10px] text-zinc-400 font-mono bg-zinc-800/60 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] text-gray-500 font-mono bg-gray-100 px-2 py-0.5 rounded-md">
                           {fileMetadata.page_count} page(s)
                         </span>
                       )}
@@ -450,7 +538,7 @@ export function TextScanView() {
                         setFindings(null);
                         setSelectedPage('all');
                       }}
-                      className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+                      className="text-xs text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
                     >
                       Change
                     </button>
@@ -461,7 +549,7 @@ export function TextScanView() {
                       type="button"
                       onClick={handleScanFile}
                       disabled={isScanning}
-                      className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-xs font-medium text-white transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+                      className="px-4 py-2 rounded-xl bg-[#18181b] hover:bg-black disabled:opacity-50 text-xs font-medium text-white transition-all shadow-xs flex items-center gap-2 cursor-pointer"
                     >
                       {isScanning ? (
                         <>
@@ -471,7 +559,7 @@ export function TextScanView() {
                       ) : (
                         <>
                           <Search className="w-3.5 h-3.5" />
-                          Analyze PDF (M6)
+                          Analyze PDF
                         </>
                       )}
                     </button>
@@ -481,19 +569,19 @@ export function TextScanView() {
             </div>
           )}
 
-          {/* Scan Warning (e.g. Incomplete scan notice) */}
+          {/* Scan Warning */}
           {scanWarning && (
-            <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-200 text-xs flex items-center gap-2.5">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+            <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 text-amber-800 text-xs flex items-center gap-2.5 shadow-2xs">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
               <span>{scanWarning}</span>
             </div>
           )}
 
-          {/* Error state with retry / dismiss */}
+          {/* Error state */}
           {errorMessage && (
-            <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs flex items-center justify-between gap-2.5">
+            <div className="p-4 rounded-2xl border border-rose-200 bg-rose-50 text-rose-800 text-xs flex items-center justify-between gap-2.5 shadow-2xs">
               <div className="flex items-center gap-2.5">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
                 <span>{errorMessage}</span>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -504,14 +592,14 @@ export function TextScanView() {
                     if (activeMode === 'text') handleScanText();
                     else handleScanFile();
                   }}
-                  className="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/30 transition-colors font-medium cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg bg-rose-200/80 hover:bg-rose-200 text-rose-900 border border-rose-300 font-medium cursor-pointer"
                 >
                   Retry
                 </button>
                 <button
                   type="button"
                   onClick={() => setErrorMessage(null)}
-                  className="text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer text-[11px]"
+                  className="text-rose-600 hover:text-rose-800 cursor-pointer text-[11px]"
                 >
                   Dismiss
                 </button>
@@ -521,55 +609,57 @@ export function TextScanView() {
 
           {/* Review & Findings Approval Panel */}
           {findings !== null && (
-            <div className="flex flex-col gap-4 rounded-xl border border-zinc-800 bg-zinc-900/60 p-5">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+            <div className="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-violet-400" />
-                  <span className="text-sm font-medium text-zinc-100">Review & Approve Transformations</span>
+                  <Sparkles className="w-4 h-4 text-indigo-600" />
+                  <span className="text-sm font-bold text-gray-900">
+                    Review & Approve Transformations
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <button
                     type="button"
                     onClick={handleSelectAll}
-                    className="text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+                    className="text-gray-500 hover:text-gray-900 cursor-pointer font-medium"
                   >
                     Select All
                   </button>
-                  <span className="text-zinc-600">·</span>
+                  <span className="text-gray-300">·</span>
                   <button
                     type="button"
                     onClick={handleDeselectAll}
-                    className="text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+                    className="text-gray-500 hover:text-gray-900 cursor-pointer font-medium"
                   >
                     Deselect All
                   </button>
-                  <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 ml-1">
+                  <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 ml-1 border border-gray-200 font-semibold">
                     {selectedFindingIds.size} / {findings.length} approved
                   </span>
                 </div>
               </div>
 
-              {/* Warning if critical secrets were unchecked */}
+              {/* Warning if critical secrets unchecked */}
               {unselectedCriticalCount > 0 && (
-                <div className="p-3.5 rounded-lg border border-rose-500/30 bg-rose-950/30 text-rose-300 text-xs flex items-center gap-2.5">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                <div className="p-3.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 text-xs flex items-center gap-2.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
                   <span>
                     Warning: {unselectedCriticalCount} critical credential(s) left unapproved. They will NOT be redacted!
                   </span>
                 </div>
               )}
 
-              {/* PDF Page Navigation & Filter */}
+              {/* PDF Page Navigation */}
               {activeMode === 'pdf' && fileMetadata?.page_count && fileMetadata.page_count > 1 && (
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-                  <span className="text-zinc-500 text-[11px] mr-1 shrink-0">Filter Page:</span>
+                  <span className="text-gray-400 text-[11px] mr-1 shrink-0">Filter Page:</span>
                   <button
                     type="button"
                     onClick={() => setSelectedPage('all')}
-                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer shrink-0 ${
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer shrink-0 ${
                       selectedPage === 'all'
-                        ? 'bg-violet-600/30 text-violet-200 border border-violet-500/40'
-                        : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        ? 'bg-gray-900 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
                     All Pages ({findings.length})
@@ -581,10 +671,10 @@ export function TextScanView() {
                         key={pNum}
                         type="button"
                         onClick={() => setSelectedPage(pNum)}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer shrink-0 ${
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer shrink-0 ${
                           selectedPage === pNum
-                            ? 'bg-violet-600/30 text-violet-200 border border-violet-500/40'
-                            : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                            ? 'bg-gray-900 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
                       >
                         Page {pNum} ({countOnPage})
@@ -595,10 +685,12 @@ export function TextScanView() {
               )}
 
               {findings.length === 0 ? (
-                <div className="py-6 flex flex-col items-center justify-center gap-2 text-center text-zinc-400">
-                  <CheckCircle className="w-8 h-8 text-emerald-400" />
-                  <p className="text-sm font-medium text-zinc-200">No sensitive entities found</p>
-                  <p className="text-xs text-zinc-500">
+                <div className="py-8 flex flex-col items-center justify-center gap-2 text-center text-gray-500">
+                  <CheckCircle className="w-8 h-8 text-emerald-500" />
+                  <p className="text-sm font-semibold text-gray-900">
+                    No sensitive entities found
+                  </p>
+                  <p className="text-xs text-gray-400">
                     {activeMode === 'image'
                       ? 'No sensitive entities detected in extracted OCR text.'
                       : activeMode === 'pdf'
@@ -607,7 +699,7 @@ export function TextScanView() {
                   </p>
                 </div>
               ) : (
-                <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
+                <div className="flex flex-col gap-2 max-h-80 overflow-y-auto pr-1">
                   {(selectedPage === 'all'
                     ? findings
                     : findings.filter((f) => f.page_number === selectedPage)
@@ -618,50 +710,53 @@ export function TextScanView() {
                       <div
                         key={f.id}
                         onClick={() => handleToggleFinding(f.id)}
-                        className={`p-3 rounded-lg border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs select-none ${
+                        className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs select-none ${
                           isSelected
-                            ? 'bg-zinc-950/80 border-violet-800/40'
-                            : 'bg-zinc-950/30 border-zinc-800/50 opacity-60'
+                            ? 'bg-indigo-50/40 border-indigo-200 shadow-2xs'
+                            : 'bg-gray-50/50 border-gray-200/60 opacity-60'
                         }`}
                       >
                         <div className="flex items-center gap-2.5">
                           {isSelected ? (
-                            <CheckSquare className="w-4 h-4 text-violet-400 shrink-0" />
+                            <CheckSquare className="w-4 h-4 text-indigo-600 shrink-0" />
                           ) : (
-                            <Square className="w-4 h-4 text-zinc-600 shrink-0" />
+                            <Square className="w-4 h-4 text-gray-400 shrink-0" />
                           )}
                           <span
-                            className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${getSeverityBadgeClass(
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getSeverityBadgeClass(
                               f.severity
                             )}`}
                           >
                             {f.severity.toUpperCase()}
                           </span>
-                          <span className="font-mono text-zinc-300 bg-zinc-800/80 px-1.5 py-0.5 rounded">
+                          <span className="font-mono text-gray-700 bg-white border border-gray-200 px-1.5 py-0.5 rounded text-[11px]">
                             {f.entity_type}
                           </span>
                           {f.page_number && (
-                            <span className="text-[10px] text-indigo-300 bg-indigo-950/60 border border-indigo-800/50 px-1.5 py-0.5 rounded font-mono">
+                            <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded font-mono">
                               Page {f.page_number}
                             </span>
                           )}
                           {f.bounding_boxes && f.bounding_boxes.length > 0 && (
-                            <span className="text-[10px] text-sky-400 bg-sky-950/60 border border-sky-800/50 px-1.5 py-0.5 rounded font-mono">
+                            <span className="text-[10px] text-sky-700 bg-sky-50 border border-sky-200 px-1.5 py-0.5 rounded font-mono">
                               {f.bounding_boxes.length} box(es)
                             </span>
                           )}
-                          <span className="text-zinc-400 font-mono truncate max-w-xs" title={snippet}>
+                          <span
+                            className="text-gray-500 font-mono truncate max-w-xs"
+                            title={snippet}
+                          >
                             "{snippet}"
                           </span>
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0 pl-6 sm:pl-0">
-                          <span className="text-zinc-500">→</span>
-                          <span className="font-mono text-violet-300 bg-violet-950/60 border border-violet-800/50 px-2 py-0.5 rounded">
+                          <span className="text-gray-400">→</span>
+                          <span className="font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded font-semibold">
                             {f.replacement}
                           </span>
                           {f.confidence !== null && (
-                            <span className="text-[10px] text-zinc-500" title="Detector confidence">
+                            <span className="text-[10px] text-gray-400 font-mono">
                               {Math.round(f.confidence * 100)}%
                             </span>
                           )}
@@ -674,8 +769,8 @@ export function TextScanView() {
 
               {/* Sanitize Action Button */}
               {findings.length > 0 && (
-                <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
-                  <span className="text-xs text-zinc-500">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-gray-100">
+                  <span className="text-xs text-gray-400">
                     {activeMode === 'pdf'
                       ? 'Approved text & vector streams will be physically purged and verified from the PDF.'
                       : activeMode === 'image'
@@ -686,7 +781,7 @@ export function TextScanView() {
                     type="button"
                     onClick={handleApplySanitization}
                     disabled={isSanitizing}
-                    className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-xs font-medium text-white transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-[#18181b] hover:bg-black disabled:opacity-50 text-xs font-semibold text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
                   >
                     {isSanitizing ? (
                       <>
@@ -697,10 +792,10 @@ export function TextScanView() {
                       <>
                         <Shield className="w-3.5 h-3.5" />
                         {activeMode === 'pdf'
-                          ? 'Redact PDF Document (M6)'
+                          ? 'Redact PDF Document'
                           : activeMode === 'image'
-                          ? 'Redact Image (M5)'
-                          : 'Apply Sanitization (M4)'}
+                          ? 'Redact Image Pixels'
+                          : 'Apply Sanitization'}
                       </>
                     )}
                   </button>
