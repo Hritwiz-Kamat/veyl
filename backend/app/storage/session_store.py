@@ -146,3 +146,44 @@ class SessionStore:
     def cleanup_expired(self) -> int:
         with self._lock:
             return self._cleanup_expired_locked()
+
+    def cleanup_stale_disk_files(self, directories: Optional[List[str]] = None, max_age_seconds: int = 1800) -> int:
+        """
+        Removes orphaned files on disk older than max_age_seconds that are not tracked
+        by any active in-memory session.
+        """
+        from app.core.config import settings
+        import time
+
+        target_dirs = directories or [settings.UPLOAD_DIR, settings.SANITIZED_DIR]
+        now_ts = time.time()
+        purged_count = 0
+
+        # Collect active file paths from current sessions
+        with self._lock:
+            active_paths = set()
+            for s in self._sessions.values():
+                if s.original_file_path:
+                    active_paths.add(os.path.abspath(s.original_file_path))
+                if s.artifact_file_path:
+                    active_paths.add(os.path.abspath(s.artifact_file_path))
+
+        for directory in target_dirs:
+            if not os.path.exists(directory):
+                continue
+            try:
+                for entry in os.scandir(directory):
+                    if entry.is_file():
+                        abs_entry = os.path.abspath(entry.path)
+                        if abs_entry not in active_paths:
+                            try:
+                                mtime = entry.stat().st_mtime
+                                if (now_ts - mtime) > max_age_seconds:
+                                    os.remove(entry.path)
+                                    purged_count += 1
+                            except OSError:
+                                pass
+            except OSError:
+                pass
+
+        return purged_count

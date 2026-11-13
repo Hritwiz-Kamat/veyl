@@ -488,11 +488,33 @@ export function TextScanView() {
             </div>
           )}
 
-          {/* Error state */}
+          {/* Error state with retry / dismiss */}
           {errorMessage && (
-            <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs flex items-center gap-2.5">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
-              <span>{errorMessage}</span>
+            <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs flex items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{errorMessage}</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMessage(null);
+                    if (activeMode === 'text') handleScanText();
+                    else handleScanFile();
+                  }}
+                  className="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/30 transition-colors font-medium cursor-pointer"
+                >
+                  Retry
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setErrorMessage(null)}
+                  className="text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer text-[11px]"
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
           )}
 

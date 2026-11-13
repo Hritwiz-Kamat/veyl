@@ -21,7 +21,7 @@ export interface UseHealthCheckResult {
 }
 
 export function useHealthCheck(): UseHealthCheckResult {
-  const [status, setStatus] = useState<HealthStatus>('idle');
+  const [status, setStatus] = useState<HealthStatus>('loading');
   const [data, setData] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,8 +41,25 @@ export function useHealthCheck(): UseHealthCheckResult {
   }, []);
 
   useEffect(() => {
-    check();
-  }, [check]);
+    let cancelled = false;
+    getHealth()
+      .then((res) => {
+        if (!cancelled) {
+          setData(res);
+          setStatus('connected');
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Unknown error');
+          setStatus('error');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return { status, data, error, refetch: check };
 }
