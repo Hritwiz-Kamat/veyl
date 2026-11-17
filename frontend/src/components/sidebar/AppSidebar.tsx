@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  Shield,
   PlusCircle,
   Home,
   History,
@@ -34,8 +33,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ className = '' }) => {
               onClick={() => navigate('/')}
               className="flex items-center gap-2.5 cursor-pointer group"
             >
-              <div className="w-7 h-7 rounded-lg bg-[#E78B55] flex items-center justify-center text-white shadow-xs group-hover:bg-[#D47A47] transition-colors">
-                <Shield className="w-4 h-4" />
+              <div className="w-7 h-7 rounded-lg bg-[#E78B55]/10 border border-[#E78B55]/20 flex items-center justify-center p-0.5 overflow-hidden shadow-2xs group-hover:scale-105 transition-transform">
+                <img src="/favicon.png" alt="RAPIT" className="w-full h-full object-contain" />
               </div>
               <div className="flex flex-col">
                 <span className="font-serif-heading font-normal tracking-wider text-xl text-[#242424]">
@@ -51,10 +50,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ className = '' }) => {
           {collapsed && (
             <div
               onClick={() => navigate('/')}
-              className="w-8 h-8 rounded-lg bg-[#E78B55] flex items-center justify-center text-white shadow-xs cursor-pointer hover:bg-[#D47A47] transition-colors"
+              className="w-8 h-8 rounded-lg bg-[#E78B55]/10 border border-[#E78B55]/20 flex items-center justify-center p-1 cursor-pointer hover:scale-105 transition-transform"
               title="RAPIT Privacy Layer"
             >
-              <Shield className="w-4 h-4" />
+              <img src="/favicon.png" alt="RAPIT" className="w-full h-full object-contain" />
             </div>
           )}
 

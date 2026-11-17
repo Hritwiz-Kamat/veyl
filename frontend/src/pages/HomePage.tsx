@@ -57,8 +57,8 @@ export const HomePage: React.FC = () => {
     <div className="flex-1 flex flex-col items-center justify-between max-w-3xl mx-auto w-full py-4 px-2 gap-8 animate-fade-in select-none">
       {/* ── Top Greeting Headline & Subtitle (Instrument Serif & DM Sans) ── */}
       <div className="flex flex-col items-center text-center mt-3 gap-1.5">
-        <h1 className="font-serif-heading text-3xl sm:text-4xl text-[#242424] font-normal tracking-tight">
-          Your privacy workspace.
+        <h1 className="font-serif-heading text-5xl sm:text-5xl text-[#242424] font-normal tracking-tight">
+          Hi User. I'm RAPIT!
         </h1>
         <p className="font-sans-ui text-base sm:text-lg text-[#92908C] font-normal tracking-normal">
           How can I help protect your data today?
