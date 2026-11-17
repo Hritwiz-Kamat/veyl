@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import birdMascot from '../assets/bird_mascot.png';
 import {
   Paperclip,
   Image as ImageIcon,
@@ -134,80 +135,14 @@ export const HomePage: React.FC = () => {
         </div>
 
         {/* Mascot Bird Graphic Illustration */}
-        <div className="flex items-center justify-center h-44">
-          <svg
-            className="w-36 h-36 drop-shadow-sm select-none"
-            viewBox="0 0 120 120"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            {/* Ambient Sparkles */}
-            <path
-              d="M100 28L102 34L108 36L102 38L100 44L98 38L92 36L98 34L100 28Z"
-              fill="#FBBF24"
+        <div className="flex items-center justify-center h-44 select-none">
+          <div className="relative group cursor-pointer">
+            <img
+              src={birdMascot}
+              alt="Bird Mascot"
+              className="w-48 h-36 object-contain drop-shadow-xs group-hover:scale-105 group-hover:-translate-y-1 transition-all duration-300"
             />
-            <path
-              d="M18 42L19.5 46.5L24 48L19.5 49.5L18 54L16.5 49.5L12 48L16.5 46.5L18 42Z"
-              fill="#FBBF24"
-            />
-
-            {/* Bird Crest / Hair */}
-            <path
-              d="M56 16C58 10 68 12 68 18C68 22 62 26 56 26"
-              fill="#F59E0B"
-            />
-            <path
-              d="M62 18C66 12 76 15 74 22C72 26 67 27 62 27"
-              fill="#FBBF24"
-            />
-
-            {/* Bird Body */}
-            <ellipse cx="60" cy="65" rx="36" ry="32" fill="#3B82F6" />
-            <path
-              d="M24 64C24 82 40 96 60 96C80 96 96 82 96 64C96 52 82 40 60 40C38 40 24 52 24 64Z"
-              fill="#60A5FA"
-            />
-
-            {/* White Tummy & Face Mask */}
-            <ellipse cx="60" cy="72" rx="26" ry="22" fill="#FFFFFF" />
-
-            {/* Cute Happy Smiling Eyes */}
-            <path
-              d="M44 60C45 56 50 56 52 60"
-              stroke="#1E293B"
-              strokeWidth="3.5"
-              strokeLinecap="round"
-            />
-            <path
-              d="M68 60C69 56 74 56 76 60"
-              stroke="#1E293B"
-              strokeWidth="3.5"
-              strokeLinecap="round"
-            />
-
-            {/* Rosy Cheeks */}
-            <ellipse cx="40" cy="66" rx="4" ry="2.5" fill="#F472B6" opacity="0.6" />
-            <ellipse cx="80" cy="66" rx="4" ry="2.5" fill="#F472B6" opacity="0.6" />
-
-            {/* Cute Yellow Beak */}
-            <polygon points="54,63 66,63 60,73" fill="#F59E0B" />
-
-            {/* Left Flapping Wing */}
-            <path
-              d="M26 62C14 56 10 74 24 82C28 84 32 78 30 72C28 66 26 62 26 62Z"
-              fill="#2563EB"
-            />
-
-            {/* Right Flapping Wing */}
-            <path
-              d="M94 62C106 56 110 74 96 82C92 84 88 78 90 72C92 66 94 62 94 62Z"
-              fill="#2563EB"
-            />
-
-            {/* Little Feet */}
-            <ellipse cx="50" cy="97" rx="5" ry="3" fill="#F59E0B" />
-            <ellipse cx="70" cy="97" rx="5" ry="3" fill="#F59E0B" />
-          </svg>
+          </div>
         </div>
       </div>
 
@@ -320,3 +255,4 @@ export const HomePage: React.FC = () => {
     </div>
   );
 };
+
