@@ -3,7 +3,6 @@ import { Outlet } from 'react-router-dom';
 import { AppSidebar } from '../components/sidebar/AppSidebar';
 import { BackendStatus } from '../components/ui/BackendStatus';
 import { RAPITCompanion } from '../components/mascot/RAPITCompanion';
-import { Lock } from 'lucide-react';
 
 export const AppLayout: React.FC = () => {
   return (
@@ -21,8 +20,7 @@ export const AppLayout: React.FC = () => {
             </span>
             <span className="text-[#D4CFC8]">/</span>
             <span className="text-xs font-medium text-[#6B6560] flex items-center gap-1.5">
-              <Lock className="w-3 h-3 text-[#E78B55]" />
-              Local Privacy Layer
+              
             </span>
           </div>
 

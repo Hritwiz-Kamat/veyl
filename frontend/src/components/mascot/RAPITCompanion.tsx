@@ -125,7 +125,7 @@ export const RAPITCompanion: React.FC = () => {
           {/* Micro status tag */}
           <div className="flex items-center gap-1 text-[10px] font-sans-ui text-[#92908C]">
             <span className="w-1.5 h-1.5 rounded-full bg-[#E78B55]" />
-            <span>RAPIT AI Companion</span>
+            <span>RAPIT</span>
           </div>
         </div>
       </div>

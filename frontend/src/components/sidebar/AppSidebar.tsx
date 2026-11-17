@@ -41,7 +41,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ className = '' }) => {
                   RAPIT
                 </span>
                 <span className="text-[10px] font-sans-ui text-[#92908C] -mt-1 tracking-tight">
-                  Privacy Layer
+                  HOLA AMIGO!
                 </span>
               </div>
             </div>
@@ -122,7 +122,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ className = '' }) => {
         {!collapsed && (
           <div className="px-2 py-1.5 rounded-lg bg-[#F3EFEA] flex items-center gap-2 text-[11px] text-[#6B6560]">
             <Lock className="w-3 h-3 text-[#E78B55] shrink-0" />
-            <span className="truncate">Local Privacy Active</span>
+            <span className="truncate">Active</span>
           </div>
         )}
 
