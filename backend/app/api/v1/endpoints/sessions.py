@@ -10,6 +10,7 @@ from app.schemas.session import SanitizeRequest, SanitizeResponse, SessionRespon
 from app.storage.session_store import SessionStore
 from app.privacy_engine.anonymizers.text_sanitizer import TextSanitizer, SanitizationError
 from app.privacy_engine.anonymizers.image_sanitizer import ImageSanitizer, ImageSanitizerError
+from app.privacy_engine.anonymizers.pdf_sanitizer import PdfSanitizer, PdfSanitizationError, PdfVerificationError
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -107,11 +108,44 @@ async def sanitize_session(session_id: str, request: SanitizeRequest) -> Sanitiz
                 detail="Failed to redact image pixels.",
             )
 
+    # PDF true redaction & verification
+    if session.file_type == "pdf" and session.original_file_path:
+        try:
+            art_id, art_path = PdfSanitizer.redact_pdf(
+                input_pdf_path=session.original_file_path,
+                original_text=session.original_text,
+                approved_findings=approved_findings,
+                output_directory=settings.SANITIZED_DIR,
+                session_id=session_id,
+            )
+            _session_store.set_artifact(session_id, art_id, art_path)
+            artifact_id = art_id
+            artifact_download_url = f"/api/v1/sessions/{session_id}/artifact/{art_id}"
+        except PdfVerificationError as e:
+            logger.error(f"PDF redaction verification failed for session {session_id}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(e),
+            )
+        except PdfSanitizationError as e:
+            logger.error(f"PDF redaction error for session {session_id}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to redact PDF: {str(e)}",
+            )
+
     # Check unapproved findings
     skipped_findings = [
         finding for fid, finding in session.findings.items() if fid not in approved_ids
     ]
     has_unredacted_credentials = any(f.severity == "critical" for f in skipped_findings)
+
+    # Persist sanitized result in session for downstream handoff
+    _session_store.set_sanitized_text(
+        session_id=session_id,
+        sanitized_text=sanitized_text,
+        has_unredacted_credentials=has_unredacted_credentials,
+    )
 
     return SanitizeResponse(
         sanitized_text=sanitized_text,
@@ -144,10 +178,14 @@ async def download_artifact(session_id: str, artifact_id: str) -> FileResponse:
             detail="Artifact file missing from storage.",
         )
 
+    is_pdf = session.file_type == "pdf" or (session.artifact_file_path and session.artifact_file_path.endswith(".pdf"))
+    media_type = "application/pdf" if is_pdf else "image/png"
+    filename = f"sanitized_{artifact_id}.pdf" if is_pdf else f"sanitized_{artifact_id}.png"
+
     return FileResponse(
         path=session.artifact_file_path,
-        media_type="image/png",
-        filename="sanitized_image.png",
+        media_type=media_type,
+        filename=filename,
     )
 
 

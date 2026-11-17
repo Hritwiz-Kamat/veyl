@@ -2,7 +2,7 @@
 
 A privacy-processing pipeline with a chat interface. Users enter prompts or upload documents; the platform detects potentially sensitive information, lets users review and approve transformations, and returns sanitized content ready to paste into an AI tool.
 
-> **Status:** M1 + M2 — monorepo scaffold, frontend shell, backend health endpoint.
+> **Status:** All milestones (M1–M8) complete — text, image & PDF detection, approval/sanitization, integration hardening, and demo handoff.
 
 ---
 
@@ -64,12 +64,12 @@ Privacy_Mask/
 |---|------|--------|
 | M1 | Repository / UI scaffold | ✅ Done |
 | M2 | Backend foundation (health, CORS) | ✅ Done |
-| M3 | Real text detection (Presidio/spaCy) | ⏳ Next |
-| M4 | Approval & sanitization | — |
-| M5 | Image processing | — |
-| M6 | PDF processing | — |
-| M7 | Integration & hardening | — |
-| M8 | Demo handoff | — |
+| M3 | Real text detection (Presidio/spaCy) | ✅ Done |
+| M4 | Approval & sanitization | ✅ Done |
+| M5 | Image processing | ✅ Done |
+| M6 | PDF processing | ✅ Done |
+| M7 | Integration & hardening | ✅ Done |
+| M8 | Demo handoff | ✅ Done |
 
 ---
 

@@ -36,6 +36,7 @@ export interface Finding {
   source: string;
   selected_by_default: boolean;
   bounding_boxes?: BoundingBox[];
+  page_number?: number;
 }
 
 export interface AnalyzeTextRequest {
@@ -60,6 +61,7 @@ export interface FileMetadata {
   size_bytes: number;
   image_width?: number;
   image_height?: number;
+  page_count?: number;
 }
 
 export interface AnalyzeFileResponse {
@@ -96,4 +98,36 @@ export interface SessionResponse {
   created_at: string;
   expires_at: string;
   artifact_id?: string;
+}
+
+// ── AI Handoff (M8) ───────────────────────────────────────────────────────────
+export interface HandoffPrepareRequest {
+  session_id: string;
+  destination: string;
+}
+
+export interface HandoffPrepareResponse {
+  session_id: string;
+  destination: string;
+  destination_name: string;
+  sanitized_content: string;
+  char_count: number;
+  has_unredacted_credentials: boolean;
+  can_handoff: boolean;
+  warning?: string;
+}
+
+export interface HandoffSendRequest {
+  session_id: string;
+  destination: string;
+  confirmed: boolean;
+}
+
+export interface HandoffSendResponse {
+  session_id: string;
+  destination: string;
+  provider_name: string;
+  status: string;
+  simulated_response: string;
+  timestamp: string;
 }

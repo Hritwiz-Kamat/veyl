@@ -20,6 +20,7 @@ export class ApiClientError extends Error {
 async function request<T>(
   path: string,
   options: RequestInit = {},
+  retries = 2,
 ): Promise<T> {
   const url = `${BASE_URL}${path}`;
 
@@ -31,27 +32,56 @@ async function request<T>(
     ...(options.headers as Record<string, string> ?? {}),
   };
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  let lastError: unknown;
 
-  if (!response.ok) {
-    let detail = `HTTP ${response.status}`;
+  for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const body = await response.json();
-      if (typeof body?.detail === 'string') detail = body.detail;
-    } catch {
-      // ignore parse errors
+      const response = await fetch(url, {
+        ...options,
+        headers,
+      });
+
+      if (!response.ok) {
+        let detail = `HTTP ${response.status}`;
+        try {
+          const body = await response.json();
+          if (typeof body?.detail === 'string') detail = body.detail;
+        } catch {
+          // ignore parse errors
+        }
+
+        // Retry on 502, 503, 504 server errors if attempts remain
+        if ([502, 503, 504].includes(response.status) && attempt < retries) {
+          await new Promise((res) => setTimeout(res, 300 * Math.pow(2, attempt)));
+          continue;
+        }
+
+        throw new ApiClientError(response.status, detail);
+      }
+
+      if (response.status === 204) {
+        return undefined as unknown as T;
+      }
+
+      return response.json() as Promise<T>;
+    } catch (err) {
+      lastError = err;
+      // Do not retry client 4xx errors
+      if (err instanceof ApiClientError && err.status < 500) {
+        throw err;
+      }
+      if (attempt < retries) {
+        await new Promise((res) => setTimeout(res, 300 * Math.pow(2, attempt)));
+      }
     }
-    throw new ApiClientError(response.status, detail);
   }
 
-  if (response.status === 204) {
-    return undefined as unknown as T;
+  if (lastError instanceof ApiClientError) {
+    throw lastError;
   }
-
-  return response.json() as Promise<T>;
+  throw new Error(
+    lastError instanceof Error ? lastError.message : 'Network request failed after retries.'
+  );
 }
 
 export const apiClient = {

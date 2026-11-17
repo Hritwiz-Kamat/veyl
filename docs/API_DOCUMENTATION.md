@@ -129,11 +129,11 @@ Applies approved finding transformations:
 ---
 
 ### GET /api/v1/sessions/{session_id}/artifact/{artifact_id}
-Downloads the pixel-redacted sanitized image artifact.
+Downloads the pixel-redacted sanitized image or truly redacted PDF document artifact.
 
 **Response 200**
-- Content-Type: `image/png`
-- Content-Disposition: `attachment; filename="sanitized_image.png"`
+- Content-Type: `image/png` or `application/pdf`
+- Content-Disposition: `attachment; filename="sanitized_{artifact_id}.png"` or `attachment; filename="sanitized_{artifact_id}.pdf"`
 
 ---
 
@@ -144,8 +144,53 @@ Explicitly deletes session data, findings, and temporary upload/artifact files f
 
 ---
 
-## Planned endpoints (M6+)
+### POST /api/v1/handoff/prepare
+Inspects sanitized session content and target AI destination (`mock-chatgpt`, `mock-claude`, `mock-cursor`) before user confirmation. Enforces that only server-sanitized content can be transmitted.
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | /api/v1/analyze/file | PDF extraction with page references and true redaction (M6) |
+**Request Body**
+```json
+{
+  "session_id": "8f3b2a1c...",
+  "destination": "mock-chatgpt"
+}
+```
+
+**Response 200**
+```json
+{
+  "session_id": "8f3b2a1c...",
+  "destination": "mock-chatgpt",
+  "destination_name": "OpenAI ChatGPT (Mock)",
+  "sanitized_content": "Hello, my name is [PERSON_1]...",
+  "char_count": 34,
+  "has_unredacted_credentials": false,
+  "can_handoff": true,
+  "warning": null
+}
+```
+
+---
+
+### POST /api/v1/handoff/send
+Executes mock AI handoff after explicit confirmation. Never sends original raw data or unmasked credentials.
+
+**Request Body**
+```json
+{
+  "session_id": "8f3b2a1c...",
+  "destination": "mock-chatgpt",
+  "confirmed": true
+}
+```
+
+**Response 200**
+```json
+{
+  "session_id": "8f3b2a1c...",
+  "destination": "mock-chatgpt",
+  "provider_name": "OpenAI ChatGPT (Mock)",
+  "status": "success",
+  "simulated_response": "Hello! I am OpenAI ChatGPT (Mock)...",
+  "timestamp": "2026-11-13T23:00:00.000Z"
+}
+```

@@ -4,6 +4,7 @@ Validates uploaded image files, runs structured word-level Tesseract OCR,
 reconstructs text, and maps detected sensitive character spans to pixel bounding boxes.
 """
 import io
+import os
 import shutil
 import logging
 from typing import List, Tuple, Dict, Any, Optional
@@ -13,6 +14,11 @@ import pytesseract
 from app.schemas.finding import Finding, BoundingBox
 
 logger = logging.getLogger(__name__)
+
+# Auto-detect Tesseract on Windows if not on PATH
+_win_tesseract = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+if os.path.isfile(_win_tesseract):
+    pytesseract.pytesseract.tesseract_cmd = _win_tesseract
 
 SUPPORTED_IMAGE_FORMATS = {"PNG", "JPEG", "WEBP"}
 
@@ -64,7 +70,8 @@ class ImageProcessor:
     def is_tesseract_available() -> bool:
         """Checks if tesseract executable exists on the system PATH or configured path."""
         try:
-            return shutil.which(pytesseract.pytesseract.tesseract_cmd) is not None or shutil.which("tesseract") is not None
+            cmd = pytesseract.pytesseract.tesseract_cmd
+            return os.path.isfile(cmd) or shutil.which(cmd) is not None or shutil.which("tesseract") is not None
         except Exception:
             return False
 

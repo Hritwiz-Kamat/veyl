@@ -1,24 +1,109 @@
+/* ── Google Fonts: Instrument Serif, Manrope, DM Sans ── */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Instrument+Serif:ital@0;1&family=Manrope:wght@300;400;500;600;700;800&display=swap');
+
 @import "tailwindcss";
 
-/* ── Base overrides ── */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
 
+:root {
+  --bg-primary: #F8F6F2;
+  --bg-surface: #FFFFFF;
+  --bg-surface-warm: #FAF8F5;
+  --border-light: #EAE5DF;
+  --border-subtle: #F0EDE8;
+  --text-primary: #242424;
+  --text-secondary: #6B6560;
+  --text-muted: #92908C;
+  --accent: #E78B55;
+  --accent-hover: #D47A47;
+  --accent-light: #FEF7F2;
+  --accent-border: #F6D5C2;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: Inter, system-ui, sans-serif;
+  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #0f0f13;
-  color: #e5e4e7;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.font-serif-heading {
+  font-family: 'Instrument Serif', Georgia, serif;
+}
+
+.font-sans-body {
+  font-family: 'Manrope', sans-serif;
+}
+
+.font-sans-ui {
+  font-family: 'DM Sans', sans-serif;
 }
 
 #root {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #D4CFC8;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B0AAA2;
+}
+
+/* Animations */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float,
+  .animate-fade-in-up,
+  .animate-fade-in {
+    animation: none;
+  }
 }
