@@ -13,12 +13,12 @@ import {
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const { showCompanion } = useRAPIT();
+  const { showCompanion, waitForCurrentStateMinDuration } = useRAPIT();
   const [promptText, setPromptText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmitPrompt = (e?: React.FormEvent) => {
+  const handleSubmitPrompt = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!promptText.trim()) {
       navigate('/scan?mode=text');
@@ -28,10 +28,13 @@ export const HomePage: React.FC = () => {
     navigate('/scan?mode=text', { state: { initialText: promptText } });
   };
 
-  const handleFilePicked = (e: React.ChangeEvent<HTMLInputElement>, mode: 'image' | 'pdf') => {
+  const handleFilePicked = async (e: React.ChangeEvent<HTMLInputElement>, mode: 'image' | 'pdf') => {
     const file = e.target.files?.[0];
     if (!file) return;
-    showCompanion('got-files', 'Got your files!', { autoHideMs: 1500 });
+
+    // Show "Got your files!" first and honor its minimum duration
+    showCompanion('got-files', 'Got your files!');
+    await waitForCurrentStateMinDuration();
     navigate(`/scan?mode=${mode}`, { state: { initialFile: file } });
   };
 
@@ -54,8 +57,8 @@ export const HomePage: React.FC = () => {
     <div className="flex-1 flex flex-col items-center justify-between max-w-3xl mx-auto w-full py-4 px-2 gap-8 animate-fade-in select-none">
       {/* ── Top Greeting Headline & Subtitle (Instrument Serif & DM Sans) ── */}
       <div className="flex flex-col items-center text-center mt-3 gap-1.5">
-        <h1 className="font-serif-heading text-5xl sm:text-5xl text-[#242424] font-normal tracking-tight">
-          Hi, User. I'm RAPIT!
+        <h1 className="font-serif-heading text-3xl sm:text-4xl text-[#242424] font-normal tracking-tight">
+          Your privacy workspace.
         </h1>
         <p className="font-sans-ui text-base sm:text-lg text-[#92908C] font-normal tracking-normal">
           How can I help protect your data today?
@@ -155,8 +158,8 @@ export const HomePage: React.FC = () => {
         {/* Slot 4: Cute RAPIT Mascot beside the cards */}
         <div className="flex items-center justify-center h-44 select-none relative group">
           <div
-            onClick={() => showCompanion('happy', 'Hi! I am RAPIT, your privacy companion.', { autoHideMs: 7000 })}
-            className="  cursor-pointer"
+            onClick={() => showCompanion('happy', 'Hi! I am RAPIT, your privacy companion.', { autoHideMs: 1800 })}
+            className="animate-float group-hover:scale-105 transition-transform duration-300 cursor-pointer"
             title="Click to greet RAPIT"
           >
             <img

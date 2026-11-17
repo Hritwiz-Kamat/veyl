@@ -26,7 +26,7 @@ export function TextScanView() {
   const location = useLocation();
   const navigate = useNavigate();
   const { setCurrentMaskingSession, addAuditLog } = useAudit();
-  const { showCompanion, hideCompanion } = useRAPIT();
+  const { showCompanion, transitionCompanion, waitForCurrentStateMinDuration, hideCompanion } = useRAPIT();
 
   const modeParam = (searchParams.get('mode') as 'text' | 'image' | 'pdf') || null;
   const [explicitMode, setExplicitMode] = useState<'text' | 'image' | 'pdf' | null>(null);
@@ -80,10 +80,19 @@ export function TextScanView() {
     setErrorMessage(null);
     setScanWarning(null);
     setSanitizeResult(null);
+
+    // Fast backend: fire immediately
+    const apiPromise = analyzeText({ text: inputText });
+
+    // Smooth frontend: show scanning mascot with guaranteed minimum display duration
     showCompanion('scanning', 'Scanning for sensitive information...');
 
     try {
-      const response = await analyzeText({ text: inputText });
+      const [response] = await Promise.all([
+        apiPromise,
+        waitForCurrentStateMinDuration(),
+      ]);
+
       setSessionId(response.session_id);
       setFindings(response.findings);
       const defaultSelected = new Set(
@@ -100,13 +109,17 @@ export function TextScanView() {
       });
 
       if (response.findings.length > 0) {
-        showCompanion('analyzing', `Found ${response.findings.length} sensitive entities. Ready for review.`, {
-          autoHideMs: 2000,
-        });
+        await transitionCompanion(
+          'analyzing',
+          `Found ${response.findings.length} sensitive entities. Ready for review.`,
+          { autoHideMs: 1500 }
+        );
       } else {
-        showCompanion('happy', 'No sensitive data detected! Safe to proceed.', {
-          autoHideMs: 2000,
-        });
+        await transitionCompanion(
+          'happy',
+          'No sensitive data detected! Safe to proceed.',
+          { autoHideMs: 1500 }
+        );
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to analyze text.';
@@ -119,7 +132,7 @@ export function TextScanView() {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -135,7 +148,10 @@ export function TextScanView() {
     setSanitizeResult(null);
     setErrorMessage(null);
     setScanWarning(null);
-    showCompanion('got-files', 'Got your files!', { autoHideMs: 1600 });
+
+    showCompanion('got-files', 'Got your files!');
+    await waitForCurrentStateMinDuration();
+    hideCompanion(false);
   };
 
   const handleScanFile = async () => {
@@ -145,10 +161,23 @@ export function TextScanView() {
     setErrorMessage(null);
     setScanWarning(null);
     setSanitizeResult(null);
+
+    // Fast backend: fire immediately
+    const apiPromise = analyzeFile(uploadedFile);
+
+    // Stage 1: Reading pose (minimum 1500ms)
     showCompanion('reading', 'Reading your files...');
+    await waitForCurrentStateMinDuration();
+
+    // Stage 2: Scanning pose (minimum 1800ms)
+    showCompanion('scanning', 'Scanning for sensitive information...');
 
     try {
-      const response = await analyzeFile(uploadedFile);
+      const [response] = await Promise.all([
+        apiPromise,
+        waitForCurrentStateMinDuration(),
+      ]);
+
       setSessionId(response.session_id);
       setFileMetadata(response.metadata);
       setInputText(response.extracted_text);
@@ -178,14 +207,19 @@ export function TextScanView() {
         timestamp: new Date().toISOString(),
       });
 
+      // Stage 3: Analyzing pose (minimum 1500ms) before revealing review screen
       if (response.findings.length > 0) {
-        showCompanion('analyzing', `Found ${response.findings.length} sensitive items in ${uploadedFile.name}`, {
-          autoHideMs: 2200,
-        });
+        await transitionCompanion(
+          'analyzing',
+          `Found ${response.findings.length} sensitive items in ${uploadedFile.name}`,
+          { autoHideMs: 1500 }
+        );
       } else {
-        showCompanion('happy', 'Scanned cleanly! No sensitive PII detected.', {
-          autoHideMs: 2000,
-        });
+        await transitionCompanion(
+          'happy',
+          'Scanned cleanly! No sensitive PII detected.',
+          { autoHideMs: 1500 }
+        );
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to analyze uploaded file.';
@@ -224,12 +258,25 @@ export function TextScanView() {
 
     setIsSanitizing(true);
     setErrorMessage(null);
+
+    // Fast backend: fire immediately
+    const sanitizePromise = sanitizeSession(sessionId, {
+      approved_finding_ids: Array.from(selectedFindingIds),
+    });
+
+    // Smooth frontend: show masking mascot with guaranteed minimum display duration (1800ms)
     showCompanion('masking', 'Wrapping your sensitive data...');
 
     try {
-      const result = await sanitizeSession(sessionId, {
-        approved_finding_ids: Array.from(selectedFindingIds),
-      });
+      const [result] = await Promise.all([
+        sanitizePromise,
+        waitForCurrentStateMinDuration(),
+      ]);
+
+      // Stage: Celebration Success (minimum 2000ms) before advancing to Sanitized Output Screen
+      showCompanion('success', 'All wrapped up!');
+      await waitForCurrentStateMinDuration();
+
       setSanitizeResult(result);
 
       // Record in session & audit log
@@ -253,7 +300,8 @@ export function TextScanView() {
         details: `Redacted ${result.applied_count} sensitive findings with verification`,
       });
 
-      showCompanion('success', 'All wrapped up!', { autoHideMs: 2200 });
+      // Smoothly dismiss mascot after success moment
+      hideCompanion(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Sanitization failed. Session may have expired.';
       setErrorMessage(msg);
@@ -266,7 +314,7 @@ export function TextScanView() {
   };
 
   const handleReset = async () => {
-    hideCompanion();
+    hideCompanion(false);
     if (sessionId) {
       try {
         await deleteSession(sessionId);
@@ -575,8 +623,8 @@ export function TextScanView() {
                       type="button"
                       onClick={() => {
                         setUploadedFile(null);
+                        setFilePreviewUrl(null);
                         setFindings(null);
-                        setSelectedPage('all');
                       }}
                       className="text-xs text-[#92908C] hover:text-[#242424] transition-colors cursor-pointer"
                     >

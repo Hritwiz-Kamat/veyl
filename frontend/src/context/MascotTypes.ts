@@ -15,6 +15,22 @@ export type MascotState =
   | 'happy'
   | 'confused';
 
+export const RAPIT_TIMINGS: Record<MascotState, number> = {
+  idle: 1200,
+  'got-files': 1500,
+  reading: 1500,
+  scanning: 1800,
+  analyzing: 1500,
+  masking: 1800,
+  success: 2000,
+  'backend-error': 2000,
+  error: 2000,
+  'taking-bit': 1500,
+  peeking: 1500,
+  happy: 1200,
+  confused: 1500,
+};
+
 export interface MascotContextType {
   state: MascotState;
   message: string | null;
@@ -25,7 +41,13 @@ export interface MascotContextType {
     message?: string,
     options?: { autoHideMs?: number; onRetry?: () => void }
   ) => void;
-  hideCompanion: () => void;
+  transitionCompanion: (
+    nextState: MascotState,
+    nextMessage?: string,
+    options?: { autoHideMs?: number; onRetry?: () => void }
+  ) => Promise<void>;
+  waitForCurrentStateMinDuration: () => Promise<void>;
+  hideCompanion: (respectMinDuration?: boolean) => Promise<void>;
 }
 
 export const MascotContext = createContext<MascotContextType | undefined>(undefined);

@@ -64,19 +64,19 @@ export const RAPITCompanion: React.FC = () => {
     <div
       role="dialog"
       aria-live="polite"
-      className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center p-4 bg-black/10 backdrop-blur-[2px] transition-all duration-300 animate-fade-in"
+      className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center p-4 bg-black/10 backdrop-blur-[2px] transition-opacity duration-300 animate-fade-in"
     >
-      <div className="relative pointer-events-auto flex flex-col items-center text-center max-w-sm w-full animate-fade-in-up select-none">
+      <div className="relative pointer-events-auto flex flex-col items-center text-center max-w-sm w-full select-none animate-fade-in-up">
         {/* Dismiss Button */}
         <button
-          onClick={hideCompanion}
+          onClick={() => hideCompanion(false)}
           aria-label="Dismiss companion"
-          className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-white/90 hover:bg-white border border-[#EAE5DF] text-[#92908C] hover:text-[#242424] flex items-center justify-center shadow-xs transition-colors cursor-pointer z-10"
+          className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-white/95 hover:bg-white border border-[#EAE5DF] text-[#92908C] hover:text-[#242424] flex items-center justify-center shadow-xs transition-colors cursor-pointer z-10"
         >
           <X className="w-3.5 h-3.5" />
         </button>
 
-        {/* Mascot Visual Figure with floating micro-interaction */}
+        {/* Mascot Visual Figure with floating animation and smooth image transition */}
         <div className="relative mb-2">
           {isCelebration && (
             <div className="absolute -top-4 -left-4 text-[#E78B55] animate-bounce">
@@ -91,16 +91,20 @@ export const RAPITCompanion: React.FC = () => {
 
           <div className="animate-float">
             <img
+              key={state}
               src={mascotSrc}
               alt={`RAPIT mascot - ${state}`}
-              className="w-36 h-36 sm:w-40 sm:h-40 object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.12)] transition-transform duration-300 hover:scale-105"
+              className="w-36 h-36 sm:w-40 sm:h-40 object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.12)] transition-all duration-300 hover:scale-105 animate-fade-in"
             />
           </div>
         </div>
 
         {/* Contextual Message Bubble Card */}
-        <div className="bg-white/95 backdrop-blur-md border border-[#EAE5DF] rounded-2xl px-5 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.08)] flex flex-col items-center gap-2 max-w-xs w-full">
-          <p className="font-sans-body text-xs sm:text-sm font-semibold text-[#242424] leading-snug">
+        <div className="bg-white/95 backdrop-blur-md border border-[#EAE5DF] rounded-2xl px-5 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.08)] flex flex-col items-center gap-2 max-w-xs w-full transition-all duration-300">
+          <p
+            key={displayMessage}
+            className="font-sans-body text-xs sm:text-sm font-semibold text-[#242424] leading-snug animate-fade-in"
+          >
             {displayMessage}
           </p>
 
@@ -108,7 +112,7 @@ export const RAPITCompanion: React.FC = () => {
           {isError && onRetry && (
             <button
               onClick={() => {
-                hideCompanion();
+                hideCompanion(false);
                 onRetry();
               }}
               className="mt-1 px-3 py-1.5 rounded-xl bg-[#242424] hover:bg-black text-white text-[11px] font-sans-ui font-semibold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
