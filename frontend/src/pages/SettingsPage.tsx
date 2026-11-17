@@ -1,241 +1,218 @@
 import React, { useState } from 'react';
 import {
-  ExternalLink,
-  Filter,
-  ChevronLeft,
-  ChevronRight,
   Sliders,
-  CreditCard,
-  Key,
-  Globe,
-  Layers,
-  Users,
-  FolderKanban,
+  Shield,
+  Trash2,
+  HardDrive,
   FileText,
+  CheckCircle2,
 } from 'lucide-react';
 import { useAudit } from '../hooks/useAudit';
 
 export const SettingsPage: React.FC = () => {
   const { auditLogs } = useAudit();
-  const [activeTab, setActiveTab] = useState('Audit Logs');
-  const [searchFilter, setSearchFilter] = useState('');
-  const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'general' | 'privacy' | 'audit'>('general');
+  const [clearSuccess, setClearSuccess] = useState(false);
 
-  const subNavItems = [
-    { name: 'Project', icon: <FolderKanban className="w-4 h-4" /> },
-    { name: 'API Access', icon: <Key className="w-4 h-4" /> },
-    { name: 'Billing', icon: <CreditCard className="w-4 h-4" /> },
-    { name: 'Environments', icon: <Layers className="w-4 h-4" /> },
-    { name: 'Content Stages', icon: <Sliders className="w-4 h-4" /> },
-    { name: 'Locales', icon: <Globe className="w-4 h-4" /> },
-    { name: 'Audit Logs', icon: <FileText className="w-4 h-4" /> },
-    { name: 'Team Members', icon: <Users className="w-4 h-4" /> },
-  ];
-
-  const filteredLogs = auditLogs.filter(
-    (log) =>
-      log.user.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
-      log.action.toLowerCase().includes(searchFilter.toLowerCase()) ||
-      log.type.toLowerCase().includes(searchFilter.toLowerCase()) ||
-      log.entityId.toLowerCase().includes(searchFilter.toLowerCase())
-  );
-
-  const getActionBadge = (action: string) => {
-    switch (action) {
-      case 'UPDATE':
-      case 'SANITIZE':
-        return 'text-blue-600 font-bold';
-      case 'UNPUBLISH':
-        return 'text-amber-600 font-bold';
-      case 'PUBLISH':
-      case 'CREATE':
-        return 'text-emerald-600 font-bold';
-      case 'DELETE':
-      case 'REDACT':
-        return 'text-rose-600 font-bold';
-      default:
-        return 'text-gray-600 font-bold';
-    }
+  const handleClearHistory = () => {
+    localStorage.removeItem('rapit_recent_sessions');
+    sessionStorage.removeItem('rapit_current_session');
+    setClearSuccess(true);
+    setTimeout(() => setClearSuccess(false), 2000);
   };
 
   return (
-    <div className="flex-1 flex flex-col md:flex-row gap-8 max-w-7xl mx-auto w-full bg-white border border-gray-200/80 rounded-3xl p-6 sm:p-8 shadow-xs">
-      {/* ── Left Sub-Navigation (matching Reference 4) ── */}
-      <aside className="w-full md:w-52 flex flex-col gap-1 shrink-0 border-b md:border-b-0 md:border-r border-gray-100 pr-0 md:pr-6 pb-4 md:pb-0">
-        <h2 className="text-xl font-bold text-gray-900 tracking-tight px-3 mb-4">
+    <div className="flex-1 flex flex-col gap-6 max-w-4xl mx-auto w-full py-4 animate-fade-in">
+      {/* ── Page Header ── */}
+      <div className="border-b border-[#EAE6DF] pb-4">
+        <h1 className="font-serif text-2xl sm:text-3xl font-medium text-[#242424] tracking-tight">
           Settings
-        </h2>
+        </h1>
+        <p className="text-xs text-[#6B6560] mt-1">
+          Manage local privacy engine policies, storage, and redaction defaults.
+        </p>
+      </div>
 
-        {subNavItems.map((item) => {
-          const isActive = activeTab === item.name;
-          return (
-            <button
-              key={item.name}
-              type="button"
-              onClick={() => setActiveTab(item.name)}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer text-left ${
-                isActive
-                  ? 'bg-gray-100 text-gray-950 font-semibold'
-                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-              }`}
-            >
-              {item.name}
-            </button>
-          );
-        })}
-      </aside>
+      {/* ── Tabs Navigation ── */}
+      <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#EFECE6] w-fit text-xs">
+        <button
+          type="button"
+          onClick={() => setActiveTab('general')}
+          className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+            activeTab === 'general'
+              ? 'bg-white text-[#242424] font-semibold shadow-2xs'
+              : 'text-[#6B6560] hover:text-[#242424]'
+          }`}
+        >
+          General
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('privacy')}
+          className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+            activeTab === 'privacy'
+              ? 'bg-white text-[#242424] font-semibold shadow-2xs'
+              : 'text-[#6B6560] hover:text-[#242424]'
+          }`}
+        >
+          Privacy & Storage
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('audit')}
+          className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+            activeTab === 'audit'
+              ? 'bg-white text-[#242424] font-semibold shadow-2xs'
+              : 'text-[#6B6560] hover:text-[#242424]'
+          }`}
+        >
+          Audit Logs
+        </button>
+      </div>
 
-      {/* ── Main Settings Panel ── */}
-      <div className="flex-1 flex flex-col gap-5 min-w-0">
-        {activeTab === 'Audit Logs' ? (
-          <>
-            {/* Header */}
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-                Audit Logs
-              </h1>
-              <p className="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
-                <span>
-                  Monitor any changes made to your project, schema and content with audit logs.
-                </span>
-                <a
-                  href="#learn-more"
-                  onClick={(e) => e.preventDefault()}
-                  className="text-indigo-600 hover:underline flex items-center gap-0.5 font-medium"
-                >
-                  Learn more <ExternalLink className="w-3 h-3 inline" />
-                </a>
-              </p>
+      {/* ── General Preferences ── */}
+      {activeTab === 'general' && (
+        <div className="flex flex-col gap-4">
+          <div className="bg-white border border-[#EAE6DF] rounded-2xl p-5 shadow-xs flex flex-col gap-4">
+            <div className="flex items-center gap-2 text-xs font-semibold text-[#242424]">
+              <Sliders className="w-4 h-4 text-[#E78B55]" />
+              <span>Redaction Format</span>
             </div>
 
-            {/* Filter Input */}
-            <div className="relative max-w-md w-full">
-              <Filter className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                value={searchFilter}
-                onChange={(e) => setSearchFilter(e.target.value)}
-                placeholder="Filter logs by user, action, type..."
-                className="w-full bg-gray-50 border border-gray-200/80 rounded-xl pl-9 pr-4 py-2 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
-              />
-            </div>
-
-            {/* Audit Table */}
-            <div className="border border-gray-200/80 rounded-2xl overflow-hidden shadow-2xs bg-white">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-gray-50/80 border-b border-gray-200/70 text-gray-500 font-medium">
-                      <th className="py-3 px-4">User</th>
-                      <th className="py-3 px-4">Entity ID</th>
-                      <th className="py-3 px-4">Action</th>
-                      <th className="py-3 px-4">Type</th>
-                      <th className="py-3 px-4">Environment</th>
-                      <th className="py-3 px-4 text-right">Timestamp</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {filteredLogs.map((log) => (
-                      <tr
-                        key={log.id}
-                        className="hover:bg-gray-50/70 transition-colors group cursor-pointer"
-                        onClick={() =>
-                          setSelectedLogId(selectedLogId === log.id ? null : log.id)
-                        }
-                      >
-                        {/* User */}
-                        <td className="py-3.5 px-4 flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 font-bold text-[10px] flex items-center justify-center shrink-0 border border-gray-300">
-                            {log.user.initials}
-                          </div>
-                          <div className="flex flex-col truncate">
-                            <span className="font-semibold text-gray-900 truncate">
-                              {log.user.name}
-                            </span>
-                            <span className="text-[10px] text-gray-400">
-                              {log.user.role}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Entity ID */}
-                        <td className="py-3.5 px-4 font-mono text-gray-500 text-[11px]">
-                          {log.entityId}
-                        </td>
-
-                        {/* Action */}
-                        <td className="py-3.5 px-4">
-                          <span className={`text-[11px] tracking-wide ${getActionBadge(log.action)}`}>
-                            {log.action}
-                          </span>
-                        </td>
-
-                        {/* Type */}
-                        <td className="py-3.5 px-4 text-gray-700 font-medium">
-                          {log.type}
-                        </td>
-
-                        {/* Environment */}
-                        <td className="py-3.5 px-4 text-gray-500">
-                          {log.environment}
-                        </td>
-
-                        {/* Timestamp */}
-                        <td className="py-3.5 px-4 text-right text-gray-500 font-mono text-[11px]">
-                          {log.timestamp}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Table Footer / Pagination matching Reference 4 */}
-              <div className="bg-gray-50/60 border-t border-gray-200/70 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
-                <span>{filteredLogs.length} items</span>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    disabled
-                    className="text-gray-400 hover:text-gray-600 disabled:opacity-50 flex items-center gap-1 cursor-pointer"
-                  >
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                    <span>Previous</span>
-                  </button>
-                  <span className="font-medium text-gray-700">
-                    Page <span className="font-bold">1</span> of 3
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <label className="p-3 rounded-xl border border-[#F6D5C2] bg-[#FEF7F2]/40 flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="radio"
+                  name="replacement_style"
+                  defaultChecked
+                  className="mt-0.5 text-[#E78B55] focus:ring-[#E78B55]"
+                />
+                <div className="flex flex-col">
+                  <span className="font-semibold text-[#242424]">Semantic Tokens</span>
+                  <span className="text-[#9C9790] text-[11px] mt-0.5">
+                    e.g. [PERSON_1], [EMAIL_ADDRESS_1]
                   </span>
-                  <button className="text-gray-600 hover:text-gray-900 flex items-center gap-1 cursor-pointer font-medium">
-                    <span>Next</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
                 </div>
+              </label>
 
-                <div className="flex items-center gap-1.5">
-                  <span>Show</span>
-                  <select className="bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-700 focus:outline-none">
-                    <option>25</option>
-                    <option>50</option>
-                    <option>100</option>
-                  </select>
+              <label className="p-3 rounded-xl border border-[#EAE6DF] hover:border-[#D4CFC8] flex items-start gap-2.5 cursor-pointer transition-colors">
+                <input
+                  type="radio"
+                  name="replacement_style"
+                  className="mt-0.5 text-[#E78B55] focus:ring-[#E78B55]"
+                />
+                <div className="flex flex-col">
+                  <span className="font-semibold text-[#242424]">Solid Block Mask</span>
+                  <span className="text-[#9C9790] text-[11px] mt-0.5">
+                    e.g. ██████████
+                  </span>
                 </div>
-              </div>
+              </label>
             </div>
-          </>
-        ) : (
-          <div className="py-12 flex flex-col items-center justify-center text-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-400">
-              <Sliders className="w-6 h-6" />
+          </div>
+
+          <div className="bg-white border border-[#EAE6DF] rounded-2xl p-5 shadow-xs flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-xs font-semibold text-[#242424]">
+                Strict Credential Redaction
+              </span>
+              <span className="text-[11px] text-[#9C9790] mt-0.5">
+                Automatically mark OpenAI, AWS, and database tokens as non-optional.
+              </span>
             </div>
-            <h3 className="text-base font-bold text-gray-800">
-              {activeTab} Management
-            </h3>
-            <p className="text-xs text-gray-500 max-w-sm">
-              Local offline privacy engine active. Enterprise cloud synchronization and team administration can be configured in future releases.
+            <input
+              type="checkbox"
+              defaultChecked
+              className="rounded border-[#D4CFC8] text-[#E78B55] focus:ring-[#E78B55] w-4 h-4"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Privacy & Storage ── */}
+      {activeTab === 'privacy' && (
+        <div className="flex flex-col gap-4">
+          <div className="bg-white border border-[#EAE6DF] rounded-2xl p-5 shadow-xs flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-xs font-semibold text-[#242424]">
+              <Shield className="w-4 h-4 text-[#4CAF7D]" />
+              <span>Local Isolation Guarantee</span>
+            </div>
+            <p className="text-xs text-[#6B6560] leading-relaxed">
+              RAPIT operates entirely in your browser and on your local machine backend (localhost).
+              None of your unredacted prompts, OCR images, or sensitive documents are transmitted to
+              third-party cloud services or telemetry databases.
             </p>
           </div>
-        )}
-      </div>
+
+          <div className="bg-white border border-[#EAE6DF] rounded-2xl p-5 shadow-xs flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#FAF8F5] border border-[#EAE6DF] flex items-center justify-center text-[#9C9790]">
+                <HardDrive className="w-4 h-4" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-[#242424]">
+                  Clear Local Scan Cache
+                </span>
+                <span className="text-[11px] text-[#9C9790]">
+                  Erase stored session records and cached redaction artifacts.
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleClearHistory}
+              className="px-3.5 py-1.5 rounded-xl border border-[#EAE6DF] hover:border-[#E05252] text-[#E05252] hover:bg-[#FEF2F2] text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              {clearSuccess ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Cleared!</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear Cache</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Audit Logs ── */}
+      {activeTab === 'audit' && (
+        <div className="border border-[#EAE6DF] rounded-2xl overflow-hidden shadow-xs bg-white">
+          <div className="p-4 border-b border-[#F0EDE8] flex items-center gap-2">
+            <FileText className="w-4 h-4 text-[#E78B55]" />
+            <span className="text-xs font-semibold text-[#242424]">
+              Audit Trail ({auditLogs.length} events)
+            </span>
+          </div>
+
+          <div className="divide-y divide-[#F0EDE8]">
+            {auditLogs.map((log) => (
+              <div key={log.id} className="p-3.5 flex items-center justify-between text-xs hover:bg-[#FAF8F5] transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="font-mono text-[10px] text-[#E78B55] bg-[#FEF7F2] border border-[#F6D5C2] px-1.5 py-0.5 rounded font-semibold">
+                    {log.action}
+                  </span>
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-medium text-[#242424] truncate">
+                      {log.details || log.type}
+                    </span>
+                    <span className="text-[10px] text-[#9C9790] font-mono">
+                      {log.entityId}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[10px] text-[#9C9790] font-mono shrink-0">
+                  {log.timestamp}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

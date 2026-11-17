@@ -1,18 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  MessageSquare,
-  Folder,
+  Shield,
+  PlusCircle,
+  Home,
+  History,
   Settings,
-  Sliders,
-  Info,
-  Sparkles,
   PanelLeftClose,
-  FileText,
-  FileCheck2,
-  Scan,
-  LogOut,
-  FolderPlus,
+  PanelLeft,
+  Lock,
 } from 'lucide-react';
 
 interface AppSidebarProps {
@@ -21,186 +17,152 @@ interface AppSidebarProps {
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({ className = '' }) => {
   const navigate = useNavigate();
-
-  const workspaceProjects = [
-    { name: 'New Project', path: '/', isPrimary: true },
-    { name: 'Pricing Section', path: '/scan?mode=text' },
-    { name: 'Design Guidelines', path: '/scan?mode=image' },
-    { name: 'Design Brief', path: '/scan?mode=pdf' },
-    { name: 'Marketing', path: '/document-output' },
-  ];
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
     <aside
-      className={`w-64 bg-[#fbfbfb] border-r border-gray-200/80 h-screen sticky top-0 flex flex-col justify-between p-4 select-none shrink-0 text-gray-700 ${className}`}
+      className={`bg-[#FAF8F5] border-r border-[#EAE5DF] h-screen sticky top-0 flex flex-col justify-between select-none shrink-0 transition-all duration-300 z-20 ${
+        collapsed ? 'w-16 p-3' : 'w-60 p-4'
+      } ${className}`}
     >
-      {/* Top Branding & Quick Actions */}
-      <div className="flex flex-col gap-4">
+      {/* Top Branding & Primary Actions */}
+      <div className="flex flex-col gap-5">
         {/* Brand header */}
-        <div className="flex items-center justify-between px-1 pt-1">
-          <div
-            onClick={() => navigate('/')}
-            className="flex items-center gap-2 cursor-pointer group"
-          >
-            <span className="font-extrabold tracking-widest text-xl text-gray-950 font-mono">
-              RAPIT
-            </span>
-          </div>
+        <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between px-1.5 pt-1'}`}>
+          {!collapsed && (
+            <div
+              onClick={() => navigate('/')}
+              className="flex items-center gap-2.5 cursor-pointer group"
+            >
+              <div className="w-7 h-7 rounded-lg bg-[#E78B55] flex items-center justify-center text-white shadow-xs group-hover:bg-[#D47A47] transition-colors">
+                <Shield className="w-4 h-4" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-serif-heading font-normal tracking-wider text-xl text-[#242424]">
+                  RAPIT
+                </span>
+                <span className="text-[10px] font-sans-ui text-[#92908C] -mt-1 tracking-tight">
+                  Privacy Layer
+                </span>
+              </div>
+            </div>
+          )}
+
+          {collapsed && (
+            <div
+              onClick={() => navigate('/')}
+              className="w-8 h-8 rounded-lg bg-[#E78B55] flex items-center justify-center text-white shadow-xs cursor-pointer hover:bg-[#D47A47] transition-colors"
+              title="RAPIT Privacy Layer"
+            >
+              <Shield className="w-4 h-4" />
+            </div>
+          )}
+
           <button
-            title="Toggle panel"
-            className="p-1 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+            onClick={() => setCollapsed(!collapsed)}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="p-1.5 text-[#92908C] hover:text-[#242424] rounded-lg hover:bg-[#EFECE6] transition-colors cursor-pointer"
           >
-            <PanelLeftClose className="w-4 h-4" />
+            {collapsed ? <PanelLeft className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
           </button>
         </div>
 
-        {/* 3 small helper icons under brand */}
-        <div className="flex items-center gap-1 px-1 text-gray-400">
-          <button
-            title="Adjust policies"
-            onClick={() => navigate('/settings')}
-            className="p-1 rounded-md hover:bg-gray-100 hover:text-gray-700 transition-colors cursor-pointer"
-          >
-            <Sliders className="w-3.5 h-3.5" />
-          </button>
-          <button
-            title="Privacy Engine info"
-            onClick={() => navigate('/settings')}
-            className="p-1 rounded-md hover:bg-gray-100 hover:text-gray-700 transition-colors cursor-pointer"
-          >
-            <Info className="w-3.5 h-3.5" />
-          </button>
-          <button
-            title="AI Privacy Layer"
-            onClick={() => navigate('/')}
-            className="p-1 rounded-md hover:bg-gray-100 hover:text-gray-700 transition-colors cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* New Chat Button */}
+        {/* Primary Action Button: New Scan */}
         <button
           onClick={() => navigate('/scan')}
-          className="w-full bg-[#18181b] hover:bg-black text-white text-xs font-medium py-2.5 px-3.5 rounded-xl flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+          className={`w-full bg-[#242424] hover:bg-black active:scale-[0.98] text-white text-xs font-sans-ui font-semibold rounded-xl flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer ${
+            collapsed ? 'p-2.5' : 'py-2.5 px-3'
+          }`}
+          title="Start New Scan"
         >
-          <MessageSquare className="w-3.5 h-3.5 text-zinc-300" />
-          <span>New Chat</span>
+          <PlusCircle className="w-4 h-4 text-[#E78B55] shrink-0" />
+          {!collapsed && <span>New Scan</span>}
         </button>
 
-        {/* Workspace section */}
-        <div className="flex flex-col gap-1 mt-2">
-          <div className="flex items-center justify-between px-2 text-[11px] font-semibold text-gray-400 tracking-wider">
-            <span>Workspace</span>
-            <FolderPlus className="w-3.5 h-3.5 text-gray-400 hover:text-gray-700 cursor-pointer" />
-          </div>
+        {/* Navigation Links */}
+        <nav className="flex flex-col gap-1 mt-1 font-sans-ui">
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) =>
+              `flex items-center gap-2.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+                collapsed ? 'justify-center p-2.5' : 'px-3 py-2'
+              } ${
+                isActive
+                  ? 'bg-[#EFECE6] text-[#242424] font-semibold'
+                  : 'text-[#6B6560] hover:bg-[#F3EFEA] hover:text-[#242424]'
+              }`
+            }
+            title="Home"
+          >
+            <Home className="w-4 h-4 shrink-0 text-[#92908C]" />
+            {!collapsed && <span>Home</span>}
+          </NavLink>
 
-          <div className="flex flex-col gap-0.5 mt-1">
-            {workspaceProjects.map((project) => (
-              <NavLink
-                key={project.name}
-                to={project.path}
-                className={({ isActive }) =>
-                  `flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs transition-colors cursor-pointer ${
-                    isActive
-                      ? 'bg-gray-200/70 text-gray-950 font-semibold shadow-2xs'
-                      : 'text-gray-600 hover:bg-gray-100/80 hover:text-gray-900'
-                  }`
-                }
-              >
-                <Folder className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                <span className="truncate">{project.name}</span>
-              </NavLink>
-            ))}
-          </div>
-        </div>
-
-        {/* Views & Outputs Navigation */}
-        <div className="flex flex-col gap-1 mt-3">
-          <div className="px-2 text-[11px] font-semibold text-gray-400 tracking-wider">
-            <span>Views & Outputs</span>
-          </div>
-
-          <div className="flex flex-col gap-0.5 mt-1">
-            <NavLink
-              to="/scan"
-              className={({ isActive }) =>
-                `flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs transition-colors cursor-pointer ${
-                  isActive
-                    ? 'bg-gray-200/70 text-gray-950 font-semibold shadow-2xs'
-                    : 'text-gray-600 hover:bg-gray-100/80 hover:text-gray-900'
-                }`
-              }
-            >
-              <Scan className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-              <span>Interactive Scanner</span>
-            </NavLink>
-
-            <NavLink
-              to="/text-output"
-              className={({ isActive }) =>
-                `flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs transition-colors cursor-pointer ${
-                  isActive
-                    ? 'bg-gray-200/70 text-gray-950 font-semibold shadow-2xs'
-                    : 'text-gray-600 hover:bg-gray-100/80 hover:text-gray-900'
-                }`
-              }
-            >
-              <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-              <span>Text Masking Output</span>
-            </NavLink>
-
-            <NavLink
-              to="/document-output"
-              className={({ isActive }) =>
-                `flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs transition-colors cursor-pointer ${
-                  isActive
-                    ? 'bg-gray-200/70 text-gray-950 font-semibold shadow-2xs'
-                    : 'text-gray-600 hover:bg-gray-100/80 hover:text-gray-900'
-                }`
-              }
-            >
-              <FileCheck2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-              <span>Doc & Image Output</span>
-            </NavLink>
-          </div>
-        </div>
+          <NavLink
+            to="/history"
+            className={({ isActive }) =>
+              `flex items-center gap-2.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+                collapsed ? 'justify-center p-2.5' : 'px-3 py-2'
+              } ${
+                isActive
+                  ? 'bg-[#EFECE6] text-[#242424] font-semibold'
+                  : 'text-[#6B6560] hover:bg-[#F3EFEA] hover:text-[#242424]'
+              }`
+            }
+            title="Scan History"
+          >
+            <History className="w-4 h-4 shrink-0 text-[#92908C]" />
+            {!collapsed && <span>History</span>}
+          </NavLink>
+        </nav>
       </div>
 
-      {/* Bottom section: Settings & User Profile */}
-      <div className="flex flex-col gap-2 pt-3 border-t border-gray-200/70">
+      {/* Bottom Section: Privacy Status, Settings & User Profile */}
+      <div className="flex flex-col gap-2 pt-3 border-t border-[#EAE5DF] font-sans-ui">
+        {!collapsed && (
+          <div className="px-2 py-1.5 rounded-lg bg-[#F3EFEA] flex items-center gap-2 text-[11px] text-[#6B6560]">
+            <Lock className="w-3 h-3 text-[#E78B55] shrink-0" />
+            <span className="truncate">Local Privacy Active</span>
+          </div>
+        )}
+
         <NavLink
           to="/settings"
           className={({ isActive }) =>
-            `flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs transition-colors cursor-pointer ${
+            `flex items-center gap-2.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+              collapsed ? 'justify-center p-2.5' : 'px-3 py-2'
+            } ${
               isActive
-                ? 'bg-gray-200/70 text-gray-950 font-semibold'
-                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                ? 'bg-[#EFECE6] text-[#242424] font-semibold'
+                : 'text-[#6B6560] hover:bg-[#F3EFEA] hover:text-[#242424]'
             }`
           }
+          title="Settings"
         >
-          <Settings className="w-4 h-4 text-gray-400" />
-          <span>Settings</span>
+          <Settings className="w-4 h-4 shrink-0 text-[#92908C]" />
+          {!collapsed && <span>Settings</span>}
         </NavLink>
 
-        <div className="flex items-center justify-between px-2 py-1.5 rounded-xl hover:bg-gray-100 transition-colors">
-          <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-7 h-7 rounded-full bg-zinc-800 text-zinc-100 font-semibold text-xs flex items-center justify-center shrink-0">
-              K
-            </div>
-            <div className="flex flex-col truncate">
-              <span className="text-xs font-semibold text-gray-800 truncate">
-                Elizabeth Keen
-              </span>
-              <span className="text-[10px] text-gray-400">Workspace Owner</span>
-            </div>
+        {/* User Workspace Info */}
+        <div
+          className={`flex items-center rounded-xl transition-colors ${
+            collapsed ? 'justify-center py-2' : 'gap-2.5 px-2.5 py-2'
+          }`}
+        >
+          <div className="w-7 h-7 rounded-full bg-[#E78B55]/15 text-[#E78B55] font-semibold text-xs flex items-center justify-center shrink-0 border border-[#E78B55]/30">
+            A
           </div>
-          <button
-            title="Log out"
-            className="text-gray-400 hover:text-gray-700 transition-colors p-1"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-          </button>
+          {!collapsed && (
+            <div className="flex flex-col truncate">
+              <span className="text-xs font-medium text-[#242424] truncate">
+                Workspace
+              </span>
+              <span className="text-[10px] text-[#92908C]">
+                Private Sandbox
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </aside>

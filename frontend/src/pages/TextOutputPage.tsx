@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Copy, Check, ArrowLeft, RefreshCw } from 'lucide-react';
+import { Copy, Check, ArrowLeft, RefreshCw, ShieldCheck } from 'lucide-react';
 import { AnonymizationReport } from '../components/reports/AnonymizationReport';
 import { useAudit } from '../hooks/useAudit';
 
@@ -9,9 +9,8 @@ export const TextOutputPage: React.FC = () => {
   const { currentMaskingSession } = useAudit();
   const [copied, setCopied] = useState(false);
 
-  // Default sample text matching realistic confidential prompts if no active session
   const defaultSampleText =
-    "Hello, my name is [PERSON_1] and my email is [EMAIL_ADDRESS_1]. My OpenAI key is [CREDENTIAL_1]. Please help me refactor my server at [IP_ADDRESS_1] with database credentials [SECRET_1]. All personal identifiers have been scrubbed by the Veyl Privacy Engine.";
+    "Hello, my name is [PERSON_1] and my email is [EMAIL_ADDRESS_1]. My OpenAI key is [CREDENTIAL_1]. Please help me refactor my server at [IP_ADDRESS_1] with database credentials [SECRET_1]. All personal identifiers have been scrubbed by the RAPIT Privacy Layer.";
 
   const textToDisplay =
     currentMaskingSession?.sanitizeResult?.sanitized_text ||
@@ -29,32 +28,32 @@ export const TextOutputPage: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col gap-6 max-w-7xl mx-auto w-full">
+    <div className="flex-1 flex flex-col gap-6 max-w-6xl mx-auto w-full animate-fade-in">
       {/* ── Page Title matching Reference 1 ── */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-2xl sm:text-3xl font-normal text-gray-950 tracking-tight">
+          <h1 className="font-serif text-2xl sm:text-3xl font-medium text-[#242424] tracking-tight">
             For text content masking output
           </h1>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-[#6B6560] mt-1">
             Deterministic cryptographic & entity sanitization generated with true content removal.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => navigate('/scan?mode=text')}
-            className="px-3.5 py-1.5 rounded-xl border border-gray-200 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors flex items-center gap-1.5 cursor-pointer bg-white"
+            className="px-3.5 py-1.5 rounded-xl border border-[#EAE6DF] text-xs font-medium text-[#6B6560] hover:text-[#242424] hover:bg-white transition-colors flex items-center gap-1.5 cursor-pointer bg-transparent"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Edit / Scan More</span>
           </button>
           <button
             onClick={() => navigate('/scan?mode=text')}
-            className="px-3.5 py-1.5 rounded-xl bg-[#18181b] hover:bg-black text-white text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-1.5 rounded-xl bg-[#242424] hover:bg-[#181818] text-white text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>New Session</span>
+            <RefreshCw className="w-3.5 h-3.5 text-[#E78B55]" />
+            <span>New Scan</span>
           </button>
         </div>
       </div>
@@ -62,39 +61,39 @@ export const TextOutputPage: React.FC = () => {
       {/* ── Layout: Main Output Card + Right Anonymization Report ── */}
       <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
         {/* Large "Wrapped" Card */}
-        <div className="flex-1 w-full bg-[#f2f2f3] border border-gray-200/80 rounded-3xl p-8 min-h-[520px] flex flex-col justify-between relative shadow-xs">
+        <div className="flex-1 w-full bg-[#EFECE6]/70 border border-[#EAE6DF] rounded-3xl p-8 min-h-[500px] flex flex-col justify-between relative shadow-xs">
           <div>
-            <h2 className="font-serif text-3xl sm:text-4xl font-normal text-gray-950 mb-6">
+            <h2 className="font-serif text-3xl sm:text-4xl font-normal text-[#242424] mb-6">
               Wrapped
             </h2>
 
-            <div className="font-mono text-sm sm:text-base text-gray-800 leading-relaxed whitespace-pre-wrap max-h-[420px] overflow-y-auto pr-2">
+            <div className="font-mono text-sm sm:text-base text-[#242424] leading-relaxed whitespace-pre-wrap max-h-[400px] overflow-y-auto pr-2">
               {textToDisplay}
             </div>
           </div>
 
-          {/* Bottom Card Bar: Session info + Copy Button */}
-          <div className="flex items-center justify-between pt-6 mt-4 border-t border-gray-300/40">
-            <span className="text-xs text-gray-400 font-mono">
-              Status:{' '}
-              <span className="text-emerald-600 font-semibold">
-                Masked & Verified (0 raw leak)
+          {/* Bottom Card Bar: Status + Copy Button */}
+          <div className="flex items-center justify-between pt-6 mt-4 border-t border-[#D4CFC8]/60">
+            <div className="flex items-center gap-1.5 text-xs text-[#6B6560] font-mono">
+              <ShieldCheck className="w-4 h-4 text-[#4CAF7D]" />
+              <span className="text-[#166534] font-semibold">
+                Sanitized & Verified
               </span>
-            </span>
+            </div>
 
             <button
               onClick={handleCopy}
               title="Copy to clipboard"
-              className="p-2.5 bg-white/90 hover:bg-white text-gray-600 hover:text-gray-900 rounded-xl border border-gray-200/80 shadow-2xs transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1.5 text-xs font-medium"
+              className="p-2.5 bg-white hover:bg-[#FAF8F5] text-[#242424] rounded-xl border border-[#EAE6DF] shadow-xs transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
             >
               {copied ? (
                 <>
-                  <Check className="w-4 h-4 text-emerald-600" />
-                  <span className="text-emerald-700 font-semibold">Copied!</span>
+                  <Check className="w-4 h-4 text-[#4CAF7D]" />
+                  <span className="text-[#166534]">Copied!</span>
                 </>
               ) : (
                 <>
-                  <Copy className="w-4 h-4 text-gray-500" />
+                  <Copy className="w-4 h-4 text-[#E78B55]" />
                   <span>Copy</span>
                 </>
               )}

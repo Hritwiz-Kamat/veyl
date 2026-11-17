@@ -1,5 +1,5 @@
 /**
- * BackendStatus — indicator showing API connection state for RAPIT light theme.
+ * BackendStatus — connection state indicator for RAPIT AI Privacy Layer.
  */
 import { ShieldCheck, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { useHealthCheck } from '../../hooks/useHealthCheck';
@@ -10,34 +10,34 @@ export function BackendStatus() {
   const configs = {
     idle: {
       icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />,
-      label: 'Connecting…',
-      color: 'text-gray-500',
-      dot: 'bg-gray-400',
+      label: 'Connecting...',
+      color: 'text-[#9C9790]',
+      dot: 'bg-[#D4CFC8]',
     },
     loading: {
       icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />,
-      label: 'Connecting…',
-      color: 'text-gray-500',
-      dot: 'bg-gray-400',
+      label: 'Connecting...',
+      color: 'text-[#9C9790]',
+      dot: 'bg-[#D4CFC8]',
     },
     connected: {
       icon: <ShieldCheck className="w-3.5 h-3.5" />,
-      label: `API v${data?.version ?? '1.0'} — connected`,
-      color: 'text-emerald-600',
-      dot: 'bg-emerald-500',
+      label: `Local API v${data?.version ?? '1.0'} connected`,
+      color: 'text-[#166534]',
+      dot: 'bg-[#4CAF7D]',
     },
     error: {
       icon: <AlertCircle className="w-3.5 h-3.5" />,
       label: 'Backend unreachable',
-      color: 'text-red-500',
-      dot: 'bg-red-500',
+      color: 'text-[#991B1B]',
+      dot: 'bg-[#E05252]',
     },
   } as const;
 
   const cfg = configs[status];
 
   return (
-    <div className="flex items-center gap-2 text-xs font-mono bg-gray-50 border border-gray-200/80 px-2.5 py-1 rounded-full shadow-2xs">
+    <div className="flex items-center gap-2 text-xs font-mono bg-[#FAF8F5] border border-[#EAE6DF] px-3 py-1 rounded-full shadow-2xs">
       <span className={`flex items-center gap-1.5 ${cfg.color}`}>
         <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} shrink-0`} />
         {cfg.icon}
@@ -47,13 +47,13 @@ export function BackendStatus() {
         <button
           onClick={refetch}
           title="Retry connection"
-          className="ml-1 p-0.5 rounded hover:text-gray-900 transition-colors text-gray-400 cursor-pointer"
+          className="ml-1 p-0.5 rounded hover:text-[#242424] transition-colors text-[#9C9790] cursor-pointer"
         >
           <RefreshCw className="w-3 h-3" />
         </button>
       )}
       {status === 'error' && error && (
-        <span className="text-gray-400 truncate max-w-xs text-[10px]" title={error}>
+        <span className="text-[#9C9790] truncate max-w-xs text-[10px]" title={error}>
           ({error})
         </span>
       )}

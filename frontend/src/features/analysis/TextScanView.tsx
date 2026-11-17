@@ -1,29 +1,32 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Sparkles,
+  Shield,
   AlertTriangle,
   CheckCircle,
   Search,
   RefreshCw,
   CheckSquare,
   Square,
-  Shield,
   Upload,
   FileText,
   ImageIcon,
   ArrowRight,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { analyzeText, analyzeFile, sanitizeSession, deleteSession } from '../../services/api';
 import type { Finding, SanitizeResponse, FileMetadata } from '../../types';
 import { SanitizedOutputView } from '../sanitization/SanitizedOutputView';
+import { ScanningExperience } from '../../components/scanning/ScanningExperience';
 import { useAudit } from '../../hooks/useAudit';
+import { useRAPIT } from '../../hooks/useRAPIT';
 
 export function TextScanView() {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
   const { setCurrentMaskingSession, addAuditLog } = useAudit();
+  const { showCompanion, hideCompanion } = useRAPIT();
 
   const modeParam = (searchParams.get('mode') as 'text' | 'image' | 'pdf') || null;
   const [explicitMode, setExplicitMode] = useState<'text' | 'image' | 'pdf' | null>(null);
@@ -36,7 +39,9 @@ export function TextScanView() {
     return (location.state as { initialText?: string })?.initialText || '';
   });
 
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(() => {
+    return (location.state as { initialFile?: File })?.initialFile || null;
+  });
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
   const [fileMetadata, setFileMetadata] = useState<FileMetadata | null>(null);
 
@@ -52,6 +57,18 @@ export function TextScanView() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
+  // Auto-scan if arriving with initial file from HomePage
+  useEffect(() => {
+    if (uploadedFile && !sessionId && !findings && !isScanning) {
+      if (uploadedFile.type.startsWith('image/')) {
+        const url = URL.createObjectURL(uploadedFile);
+        setFilePreviewUrl(url);
+      }
+      handleScanFile();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const samplePrompt =
     "Hello, my name is Alice Smith and my email is alice@example.com. My OpenAI key is sk-live1234567890abcdefghijklmnopqrstuvwxyz. Please help me refactor my server at 192.168.1.50 with password SuperSecret123!";
 
@@ -63,6 +80,7 @@ export function TextScanView() {
     setErrorMessage(null);
     setScanWarning(null);
     setSanitizeResult(null);
+    showCompanion('scanning', 'Scanning for sensitive information...');
 
     try {
       const response = await analyzeText({ text: inputText });
@@ -80,9 +98,22 @@ export function TextScanView() {
         findings: response.findings,
         timestamp: new Date().toISOString(),
       });
+
+      if (response.findings.length > 0) {
+        showCompanion('analyzing', `Found ${response.findings.length} sensitive entities. Ready for review.`, {
+          autoHideMs: 2000,
+        });
+      } else {
+        showCompanion('happy', 'No sensitive data detected! Safe to proceed.', {
+          autoHideMs: 2000,
+        });
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to analyze text.';
       setErrorMessage(msg);
+      showCompanion('backend-error', "Oops! I can't reach the privacy engine.", {
+        onRetry: () => handleScanText(),
+      });
     } finally {
       setIsScanning(false);
     }
@@ -104,6 +135,7 @@ export function TextScanView() {
     setSanitizeResult(null);
     setErrorMessage(null);
     setScanWarning(null);
+    showCompanion('got-files', 'Got your files!', { autoHideMs: 1600 });
   };
 
   const handleScanFile = async () => {
@@ -113,6 +145,7 @@ export function TextScanView() {
     setErrorMessage(null);
     setScanWarning(null);
     setSanitizeResult(null);
+    showCompanion('reading', 'Reading your files...');
 
     try {
       const response = await analyzeFile(uploadedFile);
@@ -144,9 +177,22 @@ export function TextScanView() {
         findings: response.findings,
         timestamp: new Date().toISOString(),
       });
+
+      if (response.findings.length > 0) {
+        showCompanion('analyzing', `Found ${response.findings.length} sensitive items in ${uploadedFile.name}`, {
+          autoHideMs: 2200,
+        });
+      } else {
+        showCompanion('happy', 'Scanned cleanly! No sensitive PII detected.', {
+          autoHideMs: 2000,
+        });
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to analyze uploaded file.';
       setErrorMessage(msg);
+      showCompanion('error', 'Something went wrong while reading your file.', {
+        onRetry: () => handleScanFile(),
+      });
     } finally {
       setIsScanning(false);
     }
@@ -178,6 +224,7 @@ export function TextScanView() {
 
     setIsSanitizing(true);
     setErrorMessage(null);
+    showCompanion('masking', 'Wrapping your sensitive data...');
 
     try {
       const result = await sanitizeSession(sessionId, {
@@ -185,7 +232,7 @@ export function TextScanView() {
       });
       setSanitizeResult(result);
 
-      // Record in Audit Context & recent session
+      // Record in session & audit log
       setCurrentMaskingSession({
         sessionId,
         fileType: activeMode,
@@ -198,22 +245,28 @@ export function TextScanView() {
       });
 
       addAuditLog({
-        user: { name: 'Elizabeth Keen', role: 'Owner', initials: 'EK' },
+        user: { name: 'Admin', role: 'Workspace Owner', initials: 'WS' },
         entityId: `${sessionId.slice(0, 14)}...`,
         action: 'SANITIZE',
         type: activeMode === 'text' ? 'Text Prompt' : activeMode === 'image' ? 'Image Masking' : 'PDF Document',
         environment: 'Master',
         details: `Redacted ${result.applied_count} sensitive findings with verification`,
       });
+
+      showCompanion('success', 'All wrapped up!', { autoHideMs: 2200 });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Sanitization failed. Session may have expired.';
       setErrorMessage(msg);
+      showCompanion('backend-error', "I couldn't finish wrapping your content.", {
+        onRetry: () => handleApplySanitization(),
+      });
     } finally {
       setIsSanitizing(false);
     }
   };
 
   const handleReset = async () => {
+    hideCompanion();
     if (sessionId) {
       try {
         await deleteSession(sessionId);
@@ -240,13 +293,13 @@ export function TextScanView() {
   const getSeverityBadgeClass = (severity: string) => {
     switch (severity) {
       case 'critical':
-        return 'bg-rose-50 text-rose-600 border-rose-200';
+        return 'bg-[#FEF2F2] text-[#E05252] border-[#F5C6C6]';
       case 'high':
-        return 'bg-amber-50 text-amber-600 border-amber-200';
+        return 'bg-[#FFFBF0] text-[#E5A040] border-[#F6E3B8]';
       case 'medium':
-        return 'bg-yellow-50 text-yellow-600 border-yellow-200';
+        return 'bg-[#FAF8F5] text-[#D47A47] border-[#F6D5C2]';
       default:
-        return 'bg-gray-100 text-gray-600 border-gray-200';
+        return 'bg-[#F8F6F2] text-[#6B6560] border-[#EAE6DF]';
     }
   };
 
@@ -256,24 +309,24 @@ export function TextScanView() {
     ).length ?? 0;
 
   return (
-    <div className="w-full max-w-4xl mx-auto flex flex-col gap-6">
+    <div className="w-full max-w-4xl mx-auto flex flex-col gap-6 font-sans-ui">
       {/* ── Mode Switcher Tabs ── */}
-      <div className="flex items-center justify-between border-b border-gray-200 pb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between border-b border-[#EAE6DF] pb-3">
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#EFECE6] text-xs">
           <button
             type="button"
             onClick={() => {
               setActiveMode('text');
               setErrorMessage(null);
             }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
               activeMode === 'text'
-                ? 'bg-gray-950 text-white shadow-2xs'
-                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                ? 'bg-white text-[#242424] font-semibold shadow-2xs'
+                : 'text-[#6B6560] hover:text-[#242424]'
             }`}
           >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Text Prompt Scan</span>
+            <FileText className="w-3.5 h-3.5 text-[#E78B55]" />
+            <span>Text Prompt</span>
           </button>
           <button
             type="button"
@@ -281,13 +334,13 @@ export function TextScanView() {
               setActiveMode('image');
               setErrorMessage(null);
             }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
               activeMode === 'image'
-                ? 'bg-gray-950 text-white shadow-2xs'
-                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                ? 'bg-white text-[#242424] font-semibold shadow-2xs'
+                : 'text-[#6B6560] hover:text-[#242424]'
             }`}
           >
-            <ImageIcon className="w-3.5 h-3.5" />
+            <ImageIcon className="w-3.5 h-3.5 text-[#E78B55]" />
             <span>Image Masking</span>
           </button>
           <button
@@ -296,13 +349,13 @@ export function TextScanView() {
               setActiveMode('pdf');
               setErrorMessage(null);
             }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
               activeMode === 'pdf'
-                ? 'bg-gray-950 text-white shadow-2xs'
-                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                ? 'bg-white text-[#242424] font-semibold shadow-2xs'
+                : 'text-[#6B6560] hover:text-[#242424]'
             }`}
           >
-            <FileText className="w-3.5 h-3.5" />
+            <FileText className="w-3.5 h-3.5 text-[#E78B55]" />
             <span>PDF Redaction</span>
           </button>
         </div>
@@ -317,16 +370,21 @@ export function TextScanView() {
                 navigate('/document-output');
               }
             }}
-            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+            className="text-xs font-semibold text-[#E78B55] hover:text-[#D47A47] flex items-center gap-1 cursor-pointer"
           >
-            <span>View Dedicated Canvas</span>
+            <span>Dedicated Canvas</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         )}
       </div>
 
-      {/* If sanitization result is ready, display SanitizedOutputView */}
-      {sanitizeResult !== null ? (
+      {/* ── Active Scanning Animation ── */}
+      {isScanning && (
+        <ScanningExperience fileType={activeMode} />
+      )}
+
+      {/* ── Sanitized Result Screen ── */}
+      {!isScanning && sanitizeResult !== null ? (
         <SanitizedOutputView
           sessionId={sessionId}
           originalText={inputText}
@@ -335,7 +393,7 @@ export function TextScanView() {
           onEditSelection={() => setSanitizeResult(null)}
           onNewScan={handleReset}
         />
-      ) : (
+      ) : !isScanning && (
         <>
           {/* Text Mode */}
           {activeMode === 'text' && (
@@ -344,10 +402,10 @@ export function TextScanView() {
                 <textarea
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
-                  placeholder="Paste prompt or text to analyze for PII and credentials..."
+                  placeholder="Paste confidential prompt, credentials, or text to detect sensitive PII..."
                   rows={5}
                   disabled={isScanning || isSanitizing}
-                  className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all resize-y min-h-[140px] shadow-2xs font-mono"
+                  className="w-full rounded-2xl border border-[#EAE6DF] bg-white p-5 text-xs text-[#242424] placeholder-[#92908C] focus:outline-none focus:border-[#E78B55] transition-all resize-y min-h-[140px] shadow-xs font-mono leading-relaxed"
                 />
               </div>
 
@@ -359,9 +417,9 @@ export function TextScanView() {
                     setFindings(null);
                     setSanitizeResult(null);
                   }}
-                  className="text-xs text-indigo-600 hover:text-indigo-700 underline underline-offset-2 transition-colors cursor-pointer font-medium"
+                  className="text-xs text-[#E78B55] hover:text-[#D47A47] transition-colors cursor-pointer font-medium underline underline-offset-2"
                 >
-                  Load sample prompt with PII & secrets
+                  Load sample confidential prompt with PII & secrets
                 </button>
 
                 <div className="flex items-center gap-2">
@@ -369,7 +427,7 @@ export function TextScanView() {
                     <button
                       type="button"
                       onClick={handleReset}
-                      className="px-3 py-2 rounded-xl text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer flex items-center gap-1.5"
+                      className="px-3 py-2 rounded-xl text-xs font-medium text-[#6B6560] hover:text-[#242424] border border-[#EAE6DF] hover:bg-white transition-colors cursor-pointer flex items-center gap-1.5"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                       Reset
@@ -379,19 +437,10 @@ export function TextScanView() {
                   <button
                     type="submit"
                     disabled={isScanning || isSanitizing || !inputText.trim()}
-                    className="px-4 py-2 rounded-xl bg-[#18181b] hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium text-white transition-all shadow-xs flex items-center gap-2 cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-[#242424] hover:bg-[#181818] disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold text-white transition-all shadow-xs flex items-center gap-2 cursor-pointer"
                   >
-                    {isScanning ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        Analyzing...
-                      </>
-                    ) : (
-                      <>
-                        <Search className="w-3.5 h-3.5" />
-                        Scan Text
-                      </>
-                    )}
+                    <Search className="w-3.5 h-3.5 text-[#E78B55]" />
+                    <span>Scan Text</span>
                   </button>
                 </div>
               </div>
@@ -412,30 +461,30 @@ export function TextScanView() {
               {!uploadedFile ? (
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="rounded-2xl border-2 border-dashed border-gray-200 bg-white p-10 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-indigo-500 hover:bg-indigo-50/20 transition-all text-center shadow-2xs"
+                  className="rounded-3xl border-2 border-dashed border-[#EAE6DF] bg-white p-10 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-[#E78B55] hover:bg-[#FEF7F2]/40 transition-all text-center shadow-xs"
                 >
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                  <div className="w-12 h-12 rounded-2xl bg-[#FEF7F2] border border-[#F6D5C2] flex items-center justify-center text-[#E78B55]">
                     <Upload className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-800">
+                    <p className="text-sm font-semibold text-[#242424]">
                       Click to upload image file
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      PNG, JPG, or WEBP (Max 10MB) · Structured word OCR extraction
+                    <p className="text-xs text-[#92908C] mt-1">
+                      PNG, JPG, or WEBP (Max 10MB) · Multi-word OCR extraction
                     </p>
                   </div>
                 </div>
               ) : (
-                <div className="rounded-2xl border border-gray-200 bg-white p-5 flex flex-col gap-4 shadow-2xs">
+                <div className="rounded-3xl border border-[#EAE6DF] bg-white p-5 flex flex-col gap-4 shadow-xs">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <ImageIcon className="w-4 h-4 text-indigo-600" />
-                      <span className="text-xs font-semibold text-gray-800 truncate max-w-xs">
+                      <ImageIcon className="w-4 h-4 text-[#E78B55]" />
+                      <span className="text-xs font-semibold text-[#242424] truncate max-w-xs">
                         {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)} KB)
                       </span>
                       {fileMetadata && (
-                        <span className="text-[10px] text-gray-500 font-mono bg-gray-100 px-2 py-0.5 rounded-md">
+                        <span className="text-[10px] text-[#6B6560] font-mono bg-[#FAF8F5] px-2 py-0.5 rounded-md border border-[#EAE6DF]">
                           {fileMetadata.image_width}×{fileMetadata.image_height}{' '}
                           {fileMetadata.content_type}
                         </span>
@@ -448,18 +497,18 @@ export function TextScanView() {
                         setFilePreviewUrl(null);
                         setFindings(null);
                       }}
-                      className="text-xs text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
+                      className="text-xs text-[#92908C] hover:text-[#242424] transition-colors cursor-pointer"
                     >
                       Change
                     </button>
                   </div>
 
                   {filePreviewUrl && (
-                    <div className="relative rounded-xl overflow-hidden border border-gray-100 bg-gray-50 flex justify-center max-h-64 p-2">
+                    <div className="relative rounded-2xl overflow-hidden border border-[#EAE6DF] bg-[#FAF8F5] flex justify-center max-h-64 p-2">
                       <img
                         src={filePreviewUrl}
                         alt="Upload preview"
-                        className="object-contain h-full max-h-60 rounded-lg"
+                        className="object-contain h-full max-h-60 rounded-xl"
                       />
                     </div>
                   )}
@@ -469,19 +518,10 @@ export function TextScanView() {
                       type="button"
                       onClick={handleScanFile}
                       disabled={isScanning}
-                      className="px-4 py-2 rounded-xl bg-[#18181b] hover:bg-black disabled:opacity-50 text-xs font-medium text-white transition-all shadow-xs flex items-center gap-2 cursor-pointer"
+                      className="px-4 py-2 rounded-xl bg-[#242424] hover:bg-[#181818] disabled:opacity-50 text-xs font-semibold text-white transition-all shadow-xs flex items-center gap-2 cursor-pointer"
                     >
-                      {isScanning ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          Processing OCR & Scanning...
-                        </>
-                      ) : (
-                        <>
-                          <Search className="w-3.5 h-3.5" />
-                          Analyze Image
-                        </>
-                      )}
+                      <Search className="w-3.5 h-3.5 text-[#E78B55]" />
+                      <span>Analyze Image</span>
                     </button>
                   </div>
                 </div>
@@ -503,30 +543,30 @@ export function TextScanView() {
               {!uploadedFile ? (
                 <div
                   onClick={() => pdfInputRef.current?.click()}
-                  className="rounded-2xl border-2 border-dashed border-gray-200 bg-white p-10 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-indigo-500 hover:bg-indigo-50/20 transition-all text-center shadow-2xs"
+                  className="rounded-3xl border-2 border-dashed border-[#EAE6DF] bg-white p-10 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-[#E78B55] hover:bg-[#FEF7F2]/40 transition-all text-center shadow-xs"
                 >
-                  <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600">
+                  <div className="w-12 h-12 rounded-2xl bg-[#FEF7F2] border border-[#F6D5C2] flex items-center justify-center text-[#E78B55]">
                     <FileText className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-800">
+                    <p className="text-sm font-semibold text-[#242424]">
                       Click to upload PDF document
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Selectable text & scanned page OCR fallback (Max 10MB)
+                    <p className="text-xs text-[#92908C] mt-1">
+                      Text stream search & scanned OCR sweep (Max 10MB)
                     </p>
                   </div>
                 </div>
               ) : (
-                <div className="rounded-2xl border border-gray-200 bg-white p-5 flex flex-col gap-4 shadow-2xs">
+                <div className="rounded-3xl border border-[#EAE6DF] bg-white p-5 flex flex-col gap-4 shadow-xs">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <FileText className="w-4 h-4 text-rose-600" />
-                      <span className="text-xs font-semibold text-gray-800 truncate max-w-xs">
+                      <FileText className="w-4 h-4 text-[#E78B55]" />
+                      <span className="text-xs font-semibold text-[#242424] truncate max-w-xs">
                         {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(1)} KB)
                       </span>
                       {fileMetadata?.page_count && (
-                        <span className="text-[10px] text-gray-500 font-mono bg-gray-100 px-2 py-0.5 rounded-md">
+                        <span className="text-[10px] text-[#6B6560] font-mono bg-[#FAF8F5] px-2 py-0.5 rounded-md border border-[#EAE6DF]">
                           {fileMetadata.page_count} page(s)
                         </span>
                       )}
@@ -538,7 +578,7 @@ export function TextScanView() {
                         setFindings(null);
                         setSelectedPage('all');
                       }}
-                      className="text-xs text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
+                      className="text-xs text-[#92908C] hover:text-[#242424] transition-colors cursor-pointer"
                     >
                       Change
                     </button>
@@ -549,19 +589,10 @@ export function TextScanView() {
                       type="button"
                       onClick={handleScanFile}
                       disabled={isScanning}
-                      className="px-4 py-2 rounded-xl bg-[#18181b] hover:bg-black disabled:opacity-50 text-xs font-medium text-white transition-all shadow-xs flex items-center gap-2 cursor-pointer"
+                      className="px-4 py-2 rounded-xl bg-[#242424] hover:bg-[#181818] disabled:opacity-50 text-xs font-semibold text-white transition-all shadow-xs flex items-center gap-2 cursor-pointer"
                     >
-                      {isScanning ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          Extracting Pages & OCR Scanning...
-                        </>
-                      ) : (
-                        <>
-                          <Search className="w-3.5 h-3.5" />
-                          Analyze PDF
-                        </>
-                      )}
+                      <Search className="w-3.5 h-3.5 text-[#E78B55]" />
+                      <span>Analyze PDF</span>
                     </button>
                   </div>
                 </div>
@@ -569,19 +600,18 @@ export function TextScanView() {
             </div>
           )}
 
-          {/* Scan Warning */}
+          {/* Warnings and Errors */}
           {scanWarning && (
-            <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 text-amber-800 text-xs flex items-center gap-2.5 shadow-2xs">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+            <div className="p-4 rounded-2xl border border-[#F6E3B8] bg-[#FFFBF0] text-[#92400E] text-xs flex items-center gap-2.5 shadow-xs">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-[#E5A040]" />
               <span>{scanWarning}</span>
             </div>
           )}
 
-          {/* Error state */}
           {errorMessage && (
-            <div className="p-4 rounded-2xl border border-rose-200 bg-rose-50 text-rose-800 text-xs flex items-center justify-between gap-2.5 shadow-2xs">
+            <div className="p-4 rounded-2xl border border-[#F5C6C6] bg-[#FEF2F2] text-[#991B1B] text-xs flex items-center justify-between gap-2.5 shadow-xs">
               <div className="flex items-center gap-2.5">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                <AlertTriangle className="w-4 h-4 shrink-0 text-[#E05252]" />
                 <span>{errorMessage}</span>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -592,14 +622,14 @@ export function TextScanView() {
                     if (activeMode === 'text') handleScanText();
                     else handleScanFile();
                   }}
-                  className="px-2.5 py-1 rounded-lg bg-rose-200/80 hover:bg-rose-200 text-rose-900 border border-rose-300 font-medium cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg bg-white text-[#991B1B] border border-[#F5C6C6] font-medium cursor-pointer"
                 >
                   Retry
                 </button>
                 <button
                   type="button"
                   onClick={() => setErrorMessage(null)}
-                  className="text-rose-600 hover:text-rose-800 cursor-pointer text-[11px]"
+                  className="text-[#991B1B] hover:underline cursor-pointer text-[11px]"
                 >
                   Dismiss
                 </button>
@@ -607,33 +637,33 @@ export function TextScanView() {
             </div>
           )}
 
-          {/* Review & Findings Approval Panel */}
+          {/* ── Privacy Review Screen: Findings Table & Redaction Approvals ── */}
           {findings !== null && (
-            <div className="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3">
+            <div className="flex flex-col gap-4 rounded-3xl border border-[#EAE6DF] bg-white p-6 shadow-xs animate-fade-in font-sans-ui">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#F0EDE8] pb-3">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-indigo-600" />
-                  <span className="text-sm font-bold text-gray-900">
-                    Review & Approve Transformations
+                  <SlidersHorizontal className="w-4 h-4 text-[#E78B55]" />
+                  <span className="text-sm font-semibold text-[#242424] font-sans-body">
+                    Privacy Review
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <button
                     type="button"
                     onClick={handleSelectAll}
-                    className="text-gray-500 hover:text-gray-900 cursor-pointer font-medium"
+                    className="text-[#6B6560] hover:text-[#242424] cursor-pointer font-medium"
                   >
                     Select All
                   </button>
-                  <span className="text-gray-300">·</span>
+                  <span className="text-[#D4CFC8]">·</span>
                   <button
                     type="button"
                     onClick={handleDeselectAll}
-                    className="text-gray-500 hover:text-gray-900 cursor-pointer font-medium"
+                    className="text-[#6B6560] hover:text-[#242424] cursor-pointer font-medium"
                   >
                     Deselect All
                   </button>
-                  <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 ml-1 border border-gray-200 font-semibold">
+                  <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-[#FAF8F5] text-[#242424] ml-1 border border-[#EAE6DF] font-medium">
                     {selectedFindingIds.size} / {findings.length} approved
                   </span>
                 </div>
@@ -641,10 +671,10 @@ export function TextScanView() {
 
               {/* Warning if critical secrets unchecked */}
               {unselectedCriticalCount > 0 && (
-                <div className="p-3.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 text-xs flex items-center gap-2.5">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                <div className="p-3.5 rounded-xl border border-[#F5C6C6] bg-[#FEF2F2] text-[#991B1B] text-xs flex items-center gap-2.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-[#E05252]" />
                   <span>
-                    Warning: {unselectedCriticalCount} critical credential(s) left unapproved. They will NOT be redacted!
+                    Warning: {unselectedCriticalCount} critical credential(s) unselected. They will NOT be masked!
                   </span>
                 </div>
               )}
@@ -652,14 +682,14 @@ export function TextScanView() {
               {/* PDF Page Navigation */}
               {activeMode === 'pdf' && fileMetadata?.page_count && fileMetadata.page_count > 1 && (
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-                  <span className="text-gray-400 text-[11px] mr-1 shrink-0">Filter Page:</span>
+                  <span className="text-[#92908C] text-[11px] mr-1 shrink-0">Filter Page:</span>
                   <button
                     type="button"
                     onClick={() => setSelectedPage('all')}
                     className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer shrink-0 ${
                       selectedPage === 'all'
-                        ? 'bg-gray-900 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        ? 'bg-[#242424] text-white'
+                        : 'bg-[#FAF8F5] text-[#6B6560] hover:bg-[#EAE6DF]'
                     }`}
                   >
                     All Pages ({findings.length})
@@ -673,8 +703,8 @@ export function TextScanView() {
                         onClick={() => setSelectedPage(pNum)}
                         className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer shrink-0 ${
                           selectedPage === pNum
-                            ? 'bg-gray-900 text-white'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            ? 'bg-[#242424] text-white'
+                            : 'bg-[#FAF8F5] text-[#6B6560] hover:bg-[#EAE6DF]'
                         }`}
                       >
                         Page {pNum} ({countOnPage})
@@ -684,13 +714,14 @@ export function TextScanView() {
                 </div>
               )}
 
+              {/* Findings List */}
               {findings.length === 0 ? (
-                <div className="py-8 flex flex-col items-center justify-center gap-2 text-center text-gray-500">
-                  <CheckCircle className="w-8 h-8 text-emerald-500" />
-                  <p className="text-sm font-semibold text-gray-900">
-                    No sensitive entities found
+                <div className="py-8 flex flex-col items-center justify-center gap-2 text-center text-[#6B6560]">
+                  <CheckCircle className="w-8 h-8 text-[#4CAF7D]" />
+                  <p className="text-sm font-semibold text-[#242424] font-sans-body">
+                    No sensitive entities detected
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-[#92908C]">
                     {activeMode === 'image'
                       ? 'No sensitive entities detected in extracted OCR text.'
                       : activeMode === 'pdf'
@@ -710,17 +741,17 @@ export function TextScanView() {
                       <div
                         key={f.id}
                         onClick={() => handleToggleFinding(f.id)}
-                        className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs select-none ${
+                        className={`p-3 rounded-2xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs select-none ${
                           isSelected
-                            ? 'bg-indigo-50/40 border-indigo-200 shadow-2xs'
-                            : 'bg-gray-50/50 border-gray-200/60 opacity-60'
+                            ? 'bg-[#FEF7F2]/50 border-[#F6D5C2]'
+                            : 'bg-[#FAF8F5]/60 border-[#EAE6DF]/70 opacity-60'
                         }`}
                       >
                         <div className="flex items-center gap-2.5">
                           {isSelected ? (
-                            <CheckSquare className="w-4 h-4 text-indigo-600 shrink-0" />
+                            <CheckSquare className="w-4 h-4 text-[#E78B55] shrink-0" />
                           ) : (
-                            <Square className="w-4 h-4 text-gray-400 shrink-0" />
+                            <Square className="w-4 h-4 text-[#92908C] shrink-0" />
                           )}
                           <span
                             className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getSeverityBadgeClass(
@@ -729,21 +760,16 @@ export function TextScanView() {
                           >
                             {f.severity.toUpperCase()}
                           </span>
-                          <span className="font-mono text-gray-700 bg-white border border-gray-200 px-1.5 py-0.5 rounded text-[11px]">
+                          <span className="font-mono text-[#242424] bg-white border border-[#EAE6DF] px-1.5 py-0.5 rounded text-[11px]">
                             {f.entity_type}
                           </span>
                           {f.page_number && (
-                            <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded font-mono">
+                            <span className="text-[10px] text-[#E78B55] bg-[#FEF7F2] border border-[#F6D5C2] px-1.5 py-0.5 rounded font-mono">
                               Page {f.page_number}
                             </span>
                           )}
-                          {f.bounding_boxes && f.bounding_boxes.length > 0 && (
-                            <span className="text-[10px] text-sky-700 bg-sky-50 border border-sky-200 px-1.5 py-0.5 rounded font-mono">
-                              {f.bounding_boxes.length} box(es)
-                            </span>
-                          )}
                           <span
-                            className="text-gray-500 font-mono truncate max-w-xs"
+                            className="text-[#6B6560] font-mono truncate max-w-xs"
                             title={snippet}
                           >
                             "{snippet}"
@@ -751,12 +777,12 @@ export function TextScanView() {
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0 pl-6 sm:pl-0">
-                          <span className="text-gray-400">→</span>
-                          <span className="font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded font-semibold">
+                          <span className="text-[#D4CFC8]">→</span>
+                          <span className="font-mono text-[#E78B55] bg-[#FEF7F2] border border-[#F6D5C2] px-2 py-0.5 rounded font-semibold">
                             {f.replacement}
                           </span>
                           {f.confidence !== null && (
-                            <span className="text-[10px] text-gray-400 font-mono">
+                            <span className="text-[10px] text-[#92908C] font-mono">
                               {Math.round(f.confidence * 100)}%
                             </span>
                           )}
@@ -767,35 +793,37 @@ export function TextScanView() {
                 </div>
               )}
 
-              {/* Sanitize Action Button */}
+              {/* Sanitize Action Bar */}
               {findings.length > 0 && (
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-gray-100">
-                  <span className="text-xs text-gray-400">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-[#F0EDE8]">
+                  <span className="text-xs text-[#92908C]">
                     {activeMode === 'pdf'
-                      ? 'Approved text & vector streams will be physically purged and verified from the PDF.'
+                      ? 'Approved text & vector streams will be purged and verified from the PDF.'
                       : activeMode === 'image'
                       ? 'Approved regions will have opaque black pixels applied permanently.'
-                      : 'Only checked items will be replaced.'}
+                      : 'Deterministic cryptographic replacements will be applied.'}
                   </span>
                   <button
                     type="button"
                     onClick={handleApplySanitization}
                     disabled={isSanitizing}
-                    className="px-4 py-2 rounded-xl bg-[#18181b] hover:bg-black disabled:opacity-50 text-xs font-semibold text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                    className="px-5 py-2.5 rounded-xl bg-[#E78B55] hover:bg-[#D47A47] active:scale-[0.98] disabled:opacity-50 text-xs font-semibold text-white transition-all shadow-xs flex items-center gap-2 cursor-pointer shrink-0 font-sans-ui"
                   >
                     {isSanitizing ? (
                       <>
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        Sanitizing & Verifying...
+                        <span>Sanitizing & Verifying...</span>
                       </>
                     ) : (
                       <>
                         <Shield className="w-3.5 h-3.5" />
-                        {activeMode === 'pdf'
-                          ? 'Redact PDF Document'
-                          : activeMode === 'image'
-                          ? 'Redact Image Pixels'
-                          : 'Apply Sanitization'}
+                        <span>
+                          {activeMode === 'pdf'
+                            ? 'Redact PDF Document'
+                            : activeMode === 'image'
+                            ? 'Redact Image Pixels'
+                            : 'Mask Selected Entities'}
+                        </span>
                       </>
                     )}
                   </button>

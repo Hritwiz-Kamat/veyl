@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   AuditContext,
   type AuditLogEntry,
@@ -8,130 +8,89 @@ import {
 const initialAuditLogs: AuditLogEntry[] = [
   {
     id: 'log-1',
-    user: { name: 'Fabian Beliza', role: 'Owner', initials: 'FB' },
-    entityId: 'ck6h756e49000001...',
-    action: 'UPDATE',
-    type: 'Webhook',
+    user: { name: 'Admin', role: 'Owner', initials: 'WS' },
+    entityId: 'ses-94821a00...',
+    action: 'SANITIZE',
+    type: 'PDF Document',
     environment: 'Master',
-    timestamp: '29 Jun 2020 21:37',
-    details: 'Configured local dispatch endpoint for sanitized streams',
+    timestamp: 'Today, 14:20',
+    details: 'Redacted 8 sensitive findings with cross-page vector sweep',
   },
   {
     id: 'log-2',
-    user: { name: 'Fabian Beliza', role: 'Owner', initials: 'FB' },
-    entityId: 'ck3h756e49000002...',
-    action: 'UPDATE',
-    type: 'Model',
+    user: { name: 'Admin', role: 'Owner', initials: 'WS' },
+    entityId: 'ses-42019b88...',
+    action: 'SANITIZE',
+    type: 'Text Prompt',
     environment: 'Master',
-    timestamp: '29 Jun 2020 21:05',
-    details: 'Updated detection threshold and PII regex policies',
+    timestamp: 'Yesterday, 18:05',
+    details: 'Masked API keys and customer phone numbers',
+  },
+];
+
+const initialSessions: MaskingSessionRecord[] = [
+  {
+    sessionId: 'session-demo-01',
+    fileType: 'pdf',
+    originalText: 'Confidential Patient & Employee Record...',
+    originalFileName: 'Patient_Onboarding_2024.pdf',
+    findings: [],
+    sanitizeResult: {
+      sanitized_text: 'Redacted PDF Artifact',
+      applied_count: 8,
+      skipped_count: 0,
+      all_sanitized: true,
+      has_unredacted_credentials: false,
+    },
+    timestamp: 'Today, 14:20',
   },
   {
-    id: 'log-3',
-    user: { name: 'Michael Lukaszczyk', role: 'Admin', initials: 'ML' },
-    entityId: 'tj23656e45000003...',
-    action: 'UNPUBLISH',
-    type: 'Content',
-    environment: 'Master',
-    timestamp: '29 Jun 2020 20:04',
-    details: 'Revoked raw text prompt payload with unredacted API key',
-  },
-  {
-    id: 'log-4',
-    user: { name: 'Ronak Ganatra', role: 'Editor', initials: 'RG' },
-    entityId: 'tj23656e45000004...',
-    action: 'PUBLISH',
-    type: 'Content',
-    environment: 'Master',
-    timestamp: '27 Jun 2020 16:32',
-    details: 'Approved sanitization of patient medical summary',
-  },
-  {
-    id: 'log-5',
-    user: { name: 'Darshan Gajara', role: 'Contributor', initials: 'DG' },
-    entityId: 'a901a2cb-2000005...',
-    action: 'CREATE',
-    type: 'Model',
-    environment: 'Staging',
-    timestamp: '27 Jun 2020 12:07',
-    details: 'Initiated OCR bounding box verification benchmark',
-  },
-  {
-    id: 'log-6',
-    user: { name: 'Fabian Beliza', role: 'Owner', initials: 'FB' },
-    entityId: 'zu12856e49000006...',
-    action: 'DELETE',
-    type: 'Model',
-    environment: 'Master',
-    timestamp: '21 Jun 2020 07:21',
-    details: 'Purged deprecated regex rule for legacy tokens',
-  },
-  {
-    id: 'log-7',
-    user: { name: 'Michael Lukaszczyk', role: 'Admin', initials: 'ML' },
-    entityId: 'zu12856e49000007...',
-    action: 'CREATE',
-    type: 'Model',
-    environment: 'Staging',
-    timestamp: '07 May 2020 09:18',
-    details: 'Added spaCy en_core_web_sm named entity recognizer',
-  },
-  {
-    id: 'log-8',
-    user: { name: 'Michael Lukaszczyk', role: 'Admin', initials: 'ML' },
-    entityId: 'zu12856e49000008...',
-    action: 'CREATE',
-    type: 'Content',
-    environment: 'Master',
-    timestamp: '04 May 2020 07:21',
-    details: 'Batch sanitized 12 employee onboarding documents',
-  },
-  {
-    id: 'log-9',
-    user: { name: 'Ronak Ganatra', role: 'Editor', initials: 'RG' },
-    entityId: 'ek157563h7000009...',
-    action: 'DELETE',
-    type: 'Content',
-    environment: 'Staging',
-    timestamp: '25 Apr 2020 13:47',
-    details: 'Removed expired session cache from in-memory store',
-  },
-  {
-    id: 'log-10',
-    user: { name: 'Ronak Ganatra', role: 'Editor', initials: 'RG' },
-    entityId: 'ek157563h7000010...',
-    action: 'UPDATE',
-    type: 'Content',
-    environment: 'Staging',
-    timestamp: '25 Apr 2020 09:33',
-    details: 'Approved destructive pixel masking for uploaded ID card',
+    sessionId: 'session-demo-02',
+    fileType: 'text',
+    originalText: 'Hello Alice, server key sk-live...',
+    findings: [],
+    sanitizeResult: {
+      sanitized_text: 'Hello [PERSON_1], server key [KEY_1]...',
+      applied_count: 3,
+      skipped_count: 0,
+      all_sanitized: true,
+      has_unredacted_credentials: false,
+    },
+    timestamp: 'Yesterday, 18:05',
   },
 ];
 
 export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => {
     try {
-      const stored = localStorage.getItem('veyl_audit_logs');
+      const stored = localStorage.getItem('rapit_audit_logs');
       return stored ? JSON.parse(stored) : initialAuditLogs;
     } catch {
       return initialAuditLogs;
     }
   });
 
-  const [currentMaskingSession, setCurrentMaskingSession] = useState<MaskingSessionRecord | null>(() => {
+  const [currentMaskingSession, setCurrentMaskingSessionState] = useState<MaskingSessionRecord | null>(() => {
     try {
-      const stored = sessionStorage.getItem('veyl_current_session');
+      const stored = sessionStorage.getItem('rapit_current_session');
       return stored ? JSON.parse(stored) : null;
     } catch {
       return null;
     }
   });
 
-  const [recentSessions] = useState<MaskingSessionRecord[]>([]);
+  const [recentSessions, setRecentSessions] = useState<MaskingSessionRecord[]>(() => {
+    try {
+      const stored = localStorage.getItem('rapit_recent_sessions');
+      return stored ? JSON.parse(stored) : initialSessions;
+    } catch {
+      return initialSessions;
+    }
+  });
 
   useEffect(() => {
     try {
-      localStorage.setItem('veyl_audit_logs', JSON.stringify(auditLogs));
+      localStorage.setItem('rapit_audit_logs', JSON.stringify(auditLogs));
     } catch {
       // ignore
     }
@@ -139,17 +98,30 @@ export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     try {
-      if (currentMaskingSession) {
-        sessionStorage.setItem('veyl_current_session', JSON.stringify(currentMaskingSession));
+      localStorage.setItem('rapit_recent_sessions', JSON.stringify(recentSessions));
+    } catch {
+      // ignore
+    }
+  }, [recentSessions]);
+
+  const setCurrentMaskingSession = useCallback((session: MaskingSessionRecord | null) => {
+    setCurrentMaskingSessionState(session);
+    try {
+      if (session) {
+        sessionStorage.setItem('rapit_current_session', JSON.stringify(session));
+        setRecentSessions((prev) => {
+          const filtered = prev.filter((s) => s.sessionId !== session.sessionId);
+          return [session, ...filtered].slice(0, 30);
+        });
       } else {
-        sessionStorage.removeItem('veyl_current_session');
+        sessionStorage.removeItem('rapit_current_session');
       }
     } catch {
       // ignore
     }
-  }, [currentMaskingSession]);
+  }, []);
 
-  const addAuditLog = (entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) => {
+  const addAuditLog = useCallback((entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) => {
     const now = new Date();
     const formattedDate =
       now.toLocaleDateString('en-GB', {
@@ -167,7 +139,7 @@ export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
 
     setAuditLogs((prev) => [newLog, ...prev]);
-  };
+  }, []);
 
   return (
     <AuditContext.Provider
